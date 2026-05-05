@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useThemePack } from '~/composables/useThemePack'
@@ -45,9 +45,10 @@ const internalNavItems = [
 
 // External nav items (navigate same-tab to bilibili partition pages)
 const externalNavItems = [
-  { labelKey: 'topbar.nav_movie', url: 'https://www.bilibili.com/movie/', urlPattern: /^https?:\/\/(?:www\.)?bilibili\.com\/movie(\/|$)/ },
-  { labelKey: 'topbar.nav_game', url: 'https://www.bilibili.com/v/game/', urlPattern: /\/v\/game(?!shore)/ },
-  { labelKey: 'topbar.nav_tech', url: 'https://www.bilibili.com/v/tech/', urlPattern: /\/v\/tech\// },
+  { labelKey: 'topbar.nav_movie', url: 'https://www.bilibili.com/movie/', urlPattern: /^https?:\/\/(?:www\.)?bilibili\.com\/movie(\/|$)/i },
+  // Game / Tech 兼容 B 站新旧分区路径：/v/game、/c/game、/c/Games 都能命中
+  { labelKey: 'topbar.nav_game', url: 'https://www.bilibili.com/v/game/', urlPattern: /\/(?:v|c)\/games?(?:\/|$)/i },
+  { labelKey: 'topbar.nav_tech', url: 'https://www.bilibili.com/v/tech/', urlPattern: /\/(?:v|c)\/tech(?:nology)?(?:\/|$)/i },
 ] as const
 
 // Internal nav is only active when on the home page (bilibili.com/)
@@ -58,11 +59,50 @@ function isNavActive(page: AppPage): boolean {
   return activatedPage.value === page
 }
 
-// External nav is active when the current URL matches the partition's URL pattern.
-// URL patterns are evaluated at mount time; page navigations via openExternal()
-// trigger a full page reload, so the component re-mounts and re-evaluates correctly.
+// Reactive current href: B 站 client-side router can change URL after mount
+// (e.g. /v/game/ → /v/game-center/featured)，window.location.href 不是响应式的，
+// 必须手动监听 popstate/pushstate/replaceState 同步到 ref 才能让 :class 重算。
+const currentHref = ref(window.location.href)
+
+function syncHref() {
+  currentHref.value = window.location.href
+}
+
+function patchHistory() {
+  const orig = { push: history.pushState, replace: history.replaceState }
+  history.pushState = function (...args) {
+    const r = orig.push.apply(this, args)
+    window.dispatchEvent(new Event('bewly-locationchange'))
+    return r
+  }
+  history.replaceState = function (...args) {
+    const r = orig.replace.apply(this, args)
+    window.dispatchEvent(new Event('bewly-locationchange'))
+    return r
+  }
+  return () => {
+    history.pushState = orig.push
+    history.replaceState = orig.replace
+  }
+}
+
+let restoreHistory: (() => void) | null = null
+onMounted(() => {
+  window.addEventListener('popstate', syncHref)
+  window.addEventListener('hashchange', syncHref)
+  window.addEventListener('bewly-locationchange', syncHref)
+  restoreHistory = patchHistory()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', syncHref)
+  window.removeEventListener('hashchange', syncHref)
+  window.removeEventListener('bewly-locationchange', syncHref)
+  restoreHistory?.()
+})
+
 function isExternalNavActive(item: typeof externalNavItems[number]): boolean {
-  return item.urlPattern.test(window.location.href)
+  return item.urlPattern.test(currentHref.value)
 }
 
 function navigateTo(page: AppPage) {
