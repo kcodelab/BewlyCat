@@ -106,6 +106,7 @@ export interface ShortcutsSettings {
 export type VideoCardFontSizeSetting = 'xs' | 'sm' | 'base' | 'lg'
 export type VideoCardLayoutSetting = 'modern' | 'compact' | 'old'
 export type AutoPlayMode = 'default' | 'autoPlay' | 'autoPlayWithRecommend' | 'pauseAtEnd' | 'loop'
+export type ThemePackSetting = 'default' | 'netflix'
 
 export interface ShadowCurvePoint {
   position: number
@@ -233,6 +234,7 @@ export interface Settings {
   sidebarPosition: 'left' | 'right'
   autoHideSidebar: boolean
 
+  themePack: ThemePackSetting
   theme: 'light' | 'dark' | 'auto'
   themeColor: string
   darkModeBaseColor: string // 深色模式基准颜色
@@ -451,6 +453,7 @@ export const originalSettings: Settings = {
   sidebarPosition: 'right',
   autoHideSidebar: false,
 
+  themePack: 'default',
   theme: 'auto',
   themeColor: '#00a1d6',
   darkModeBaseColor: '#2a2d32', // 默认深色模式基准颜色
