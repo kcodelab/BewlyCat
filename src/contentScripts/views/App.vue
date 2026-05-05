@@ -15,7 +15,7 @@ import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
-import { isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
+import { injectCSS, isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
@@ -368,10 +368,40 @@ watch(
   { immediate: true, flush: 'post' },
 )
 
-watch([() => showTopBar.value, () => activatedPage.value], () => {
+// Inject global CSS rules for Netflix mode body class once at setup time.
+// These rules target the *document* (outside shadow DOM) so they affect B站 native elements.
+injectCSS(`
+  /* BewlyCat Netflix mode: hide B站 native header so partition pages have no blank gap */
+  body.bewly-netflix-mode .bili-header,
+  body.bewly-netflix-mode #biliMainHeader {
+    display: none !important;
+  }
+  /* Give partition page content room for the fixed TopBarNetflix */
+  body.bewly-netflix-mode {
+    padding-top: var(--bew-top-bar-height, 60px) !important;
+  }
+`)
+
+watch([() => showTopBar.value, () => activatedPage.value, () => isNetflixThemePack.value], () => {
   // Remove the original Bilibili top bar when using original bilibili page to avoid two top bars showing
   const biliHeader = document.querySelector('.bili-header') as HTMLElement | null
-  if (biliHeader && isHomePage()) {
+
+  // Netflix mode: always hide B站 native header with display:none (no reserved space)
+  // so partition pages (movie / game / tech) don't show a blank gap below TopBarNetflix.
+  // Also add body class so partition page content gets top padding to clear TopBarNetflix.
+  if (isNetflixThemePack.value) {
+    if (biliHeader)
+      biliHeader.style.display = 'none'
+    document.body.classList.add('bewly-netflix-mode')
+    return
+  }
+
+  // Default mode: remove netflix body class, restore display, keep original visibility logic
+  document.body.classList.remove('bewly-netflix-mode')
+  if (!biliHeader)
+    return
+  biliHeader.style.removeProperty('display')
+  if (isHomePage()) {
     if (settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value) && !isInIframe()) {
       biliHeader.style.visibility = 'hidden'
     }
