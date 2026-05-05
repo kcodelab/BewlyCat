@@ -134,11 +134,11 @@ function openVideo(video: HeroVideo | null) {
         </p>
         <div class="hero-banner__actions">
           <button class="hero-banner__btn hero-banner__btn--play" @click="openVideo(currentVideo)">
-            <i class="hero-banner__btn-icon i-mingcute:play-fill" />
+            <div i-mingcute:play-fill class="hero-banner__btn-icon" />
             <span>播放</span>
           </button>
           <button class="hero-banner__btn hero-banner__btn--info" @click="openVideo(currentVideo)">
-            <i class="hero-banner__btn-icon i-mingcute:information-line" />
+            <div i-mingcute:information-line class="hero-banner__btn-icon" />
             <span>更多信息</span>
           </button>
         </div>
