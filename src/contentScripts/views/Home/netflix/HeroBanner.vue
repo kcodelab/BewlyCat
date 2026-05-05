@@ -175,11 +175,19 @@ function openVideo(video: HeroVideo | null) {
 
 <style scoped>
 .hero-banner {
+  /* full-bleed: 把 Hero 拉伸到视口左右边，跳出 .netflix-home 的 2rem padding */
   position: relative;
-  width: 100%;
+  width: 100vw;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  /* 让 Hero 顶起到屏幕顶部，TopBar 半透明叠在上面（与 App.vue 的
+     padding-top: top-bar-height + 10px 抵消） */
+  margin-top: calc(-1 * (var(--bew-top-bar-height, 60px) + 10px));
   height: 56.25vw;
-  max-height: 80vh;
-  min-height: 300px;
+  max-height: 92vh;
+  min-height: 320px;
   overflow: hidden;
   background: var(--bew-bg);
   margin-bottom: 2.5rem;
@@ -202,7 +210,11 @@ function openVideo(video: HeroVideo | null) {
 .hero-banner__gradient {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, transparent 40%, rgba(20, 20, 20, 0.6) 70%, rgba(20, 20, 20, 0.95) 100%);
+  /* 顶部多一道淡黑做 TopBar 让位（让透明顶栏文字在亮色封面上仍可读），
+     底部继续渐入纯黑融入页面背景 */
+  background:
+    linear-gradient(to bottom, rgba(20, 20, 20, 0.55) 0%, rgba(20, 20, 20, 0) 18%),
+    linear-gradient(to bottom, transparent 40%, rgba(20, 20, 20, 0.6) 70%, rgba(20, 20, 20, 0.95) 100%);
 }
 
 /* ── Content ─────────────────────────────────────── */
