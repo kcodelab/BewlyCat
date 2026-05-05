@@ -138,8 +138,12 @@ function handleOpenSettings() {
       </nav>
 
       <!-- Right: Search + TopBarRight -->
-      <div class="netflix-topbar__right" flex="~ items-center gap-2" shrink-0>
-        <TopBarSearch />
+      <div class="netflix-topbar__right" flex="~ items-center gap-3" shrink-0>
+        <!-- 固定宽度容器防止 TopBarSearch（flex:1 w-full）吞噬右侧剩余空间
+             把头像等组件挤出可视区。小屏幕用更窄宽度避免溢出。 -->
+        <div w="240px lg:280px" shrink-0>
+          <TopBarSearch />
+        </div>
         <TopBarRight
           :simplified="true"
           @notifications-click="handleNotificationsItemClick"
