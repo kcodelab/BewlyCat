@@ -44,18 +44,31 @@ const SCROLL_OPAQUE_THRESHOLD = 80
 const scrollTop = ref(0)
 const isScrolled = computed(() => scrollTop.value > SCROLL_OPAQUE_THRESHOLD)
 
-function handleScroll(top: number) {
+function handleOverlayScroll(top: number) {
   scrollTop.value = top
+}
+
+function handleWindowScroll() {
+  // 二级页面（B 站原生页）BewlyCat 不接管渲染，用原生 window 滚动；
+  // Home 页面用 OVERLAY_SCROLL_BAR_SCROLL，window scrollY 不变。
+  // 取两个来源的最大值，谁滚谁说了算
+  const winTop = window.scrollY || document.documentElement.scrollTop || 0
+  if (winTop > scrollTop.value)
+    scrollTop.value = winTop
+  else if (winTop !== scrollTop.value && winTop < SCROLL_OPAQUE_THRESHOLD)
+    scrollTop.value = winTop
 }
 
 onMounted(() => {
   // 初始读一次原生 scrollTop（兜底，避免 mitt 事件首次触发前透明度异常）
   scrollTop.value = document.documentElement.scrollTop
-  emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
+  emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
+  window.addEventListener('scroll', handleWindowScroll, { passive: true })
 })
 
 onUnmounted(() => {
-  emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
+  emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
+  window.removeEventListener('scroll', handleWindowScroll)
 })
 
 // Internal nav items (those mapped to BewlyCat pages)
