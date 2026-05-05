@@ -16,18 +16,21 @@
 
 **Files:** none
 
-- [ ] Confirm baseline commands run clean on `main` before any work:
+- [ ] Confirm `package.json` exposes the script names this plan relies on (`lint`, `typecheck`, `test`, `dev`, `build`, `build-firefox`). If any is renamed or missing, update plan references **before** running the baseline.
+
+- [ ] Run baseline commands on `main` and **record the exit code of each**:
 
 ```bash
 pnpm install
-pnpm lint
-pnpm typecheck
-pnpm test
+pnpm lint;       echo "lint exit=$?"
+pnpm typecheck;  echo "typecheck exit=$?"
+pnpm test;       echo "test exit=$?"
+pnpm build;      echo "build exit=$?"
 ```
 
-Expected: all PASS. If any fails, STOP and report; do not start Task 1 on a broken baseline.
+Expected: every exit code is `0`. **Any non-zero — including "script not found" (127) — STOP** and report which command failed and the exit code; do not start Task 1 on a broken or ambiguous baseline. This explicitly distinguishes "script missing" from "script ran but failed".
 
-- [ ] Confirm `package.json` exposes the script names this plan relies on (`lint`, `typecheck`, `test`, `dev`, `build`). If renamed, update plan references before continuing.
+- [ ] Confirm extension manifest target. The project ships **MV3 only** (`src/manifest.ts` sets `manifest_version: 3` for all browsers; Firefox uses MV3 with `background.scripts`). Plan therefore does not include MV2 testing — if the project ever re-adds an MV2 build later, Task 9 must be revisited.
 
 - [ ] Snapshot the entry points this plan must not regress:
   - `src/contentScripts/views/Home/Home.vue` — record line count, list its `provide()` keys, expose-d refs, watched emitter events, scroll-related state names.
@@ -299,19 +302,25 @@ For each hit, decide:
 - [ ] **Step 2: Extend tests**
 
 ```ts
-it('toggleDark is a no-op for settings.theme when netflix pack is active', async () => {
-  const { toggleDark } = await import('~/composables/useDark').then(m => m.useDark())
+import { useDark } from '~/composables/useDark'
+
+it('toggleDark is a no-op for settings.theme when netflix pack is active', () => {
+  // Set state BEFORE invoking useDark() so its internal computeds capture the right values.
   settings.value.theme = 'light'
   settings.value.themePack = 'netflix'
-  // synthesize a minimal MouseEvent
+
+  const { toggleDark } = useDark()
   toggleDark({ clientX: 0, clientY: 0 } as MouseEvent)
+
   expect(settings.value.theme).toBe('light')
 })
 
-it('AppBackground gates rendering on shouldSuppressWallpaper', async () => {
+it('AppBackground gates rendering on shouldSuppressWallpaper', () => {
   // mount AppBackground in suppressed and unsuppressed states; assert wallpaper element absent in suppressed.
 })
 ```
+
+> Avoid the `await import(...).then(m => m.useDark())` pattern — it's correct but obscure, and earlier review flagged it as a closure trap. Use a static import + plain `useDark()` call after state is set.
 
 - [ ] **Step 3: Run tests** → expect FAIL on the new assertions until Step 4 lands.
 
@@ -429,16 +438,12 @@ settings:
   theme_locked_by_pack: 由 Netflix 佈景主題包鎖定
 ```
 
-```yaml
-# jyut.yml — leave keys present; if maintainer is not fluent in Cantonese, add a comment marking these as "needs review" and copy zh-CN values as placeholder
-settings:
-  group_theme_pack: 主題包  # TODO: Cantonese review
-  theme_pack: 主題包  # TODO: Cantonese review
-  theme_pack_default: 預設
-  theme_pack_netflix: Netflix
-  theme_pack_netflix_desc: 強制開啟深色 + Netflix 紅，將首頁改為 row 佈局，隱藏桌布。  # TODO: Cantonese review
-  theme_locked_by_pack: 由 Netflix 主題包鎖定  # TODO: Cantonese review
-```
+**jyut.yml policy** — current BewlyCat convention (per `docs/CONTRIBUTING.md`) explicitly bans pseudo-translation tooling and prefers honest fallback. **Do NOT** copy zh-TW into jyut as a placeholder; that produces confusing "fake Cantonese" entries that look correct but aren't. Instead:
+
+- **Option A (preferred)**: leave the new keys **out of jyut.yml**. vue-i18n's fallback chain falls back to English (project default fallback), which is preferable to wrong Cantonese.
+- **Option B**: ship with native Cantonese translation provided by a fluent maintainer.
+
+Default plan: take Option A; add an entry to PR description: "jyut.yml entries deferred — fallback will use English until a Cantonese-fluent contributor adds them." Update CHANGELOG accordingly.
 
 - [ ] **Step 3: Switching transition** — the radio's `@change` handler calls `runWithViewTransition` (from Task 2) before writing `settings.value.themePack`. The wrapper handles shadow-DOM-safe transitions; if `document.startViewTransition` is unavailable (Firefox), it must fall back to a no-op write.
 
@@ -587,12 +592,12 @@ let inflight: Promise<void> | null = null
 
 interface Deps { fetchTrending: () => Promise<any[]> }
 
-let deps: Deps = { fetchTrending: defaultFetchTrending }
-
+// Production callers MUST call useTrendingData() with NO arguments.
+// `override` is a TEST-ONLY seam. It is consumed only inside the load() that this call
+// returns; it is NEVER written back to module-scope state, so concurrent production
+// callers cannot be poisoned by a previous test's mock.
 export function useTrendingData(override?: Partial<Deps>) {
-  if (override)
-    deps = { ...deps, ...override }
-  return { items, loading, error, load }
+  const effectiveDeps: Deps = { fetchTrending: defaultFetchTrending, ...override }
 
   async function load() {
     if (inflight)
@@ -600,12 +605,14 @@ export function useTrendingData(override?: Partial<Deps>) {
     loading.value = true
     error.value = null
     inflight = (async () => {
-      try { items.value = await deps.fetchTrending() }
+      try { items.value = await effectiveDeps.fetchTrending() }
       catch (e) { error.value = e as Error }
       finally { loading.value = false; inflight = null }
     })()
     return inflight
   }
+
+  return { items, loading, error, load }
 }
 
 export function _resetForTest() {
@@ -613,9 +620,13 @@ export function _resetForTest() {
   loading.value = false
   error.value = null
   inflight = null
-  deps = { fetchTrending: defaultFetchTrending }
 }
 ```
+
+Key invariants:
+- **`items` / `loading` / `error` / `inflight` are module-scoped** → singleton cache shared across all consumers (decision #9).
+- **`deps` is per-call**, not module-scoped → test mocks cannot leak into other callers.
+- `_resetForTest()` resets only the cached state, not deps (deps was never module-scoped to begin with).
 
 Repeat for the 8 other composables. **`useHistoryData` is independent** — it has no SubPage; it powers the Continue Watching row only and its consumer is `ContinueWatchingRow.vue`.
 
@@ -737,7 +748,7 @@ export function pickHeroCandidate<T extends { coverScore?: number }>(
 }
 ```
 
-- [ ] **Step 4: HorizontalRow with overflow** — `overflow-x: auto`. Hover overlay (Task 7) will Teleport out, so the row's `overflow-y` clipping is acceptable here.
+- [ ] **Step 4: HorizontalRow with overflow** — `overflow-x: auto` (CSS spec forces `overflow-y: auto` as a side effect; this is fine **only because** Task 7's hover overlay will Teleport out of the row per spec decision #4). Do NOT attempt `overflow: visible` workarounds here.
 
 - [ ] **Step 5: Wire to composables** — each row pulls from its singleton composable; HomeNetflix triggers `load()` on mount for visible rows only (lazy-load below-fold via IntersectionObserver if perf demands).
 
@@ -811,13 +822,20 @@ interface Props { variant?: 'grid' | 'netflix-row'; /* existing props */ }
 const props = withDefaults(defineProps<Props>(), { variant: 'grid' })
 
 const isClassicVariant = computed(() => props.variant !== 'netflix-row')
-// AND every existing preview-related computed with isClassicVariant.value
-// Audit list (from Task 0 snapshot):
-//   - shouldLoadPreview
-//   - shouldShowPreviewVideo
-//   - hoverPreviewEnabled
-//   - any other preview/hover flag found via grep
 ```
+
+**Disposition table — every preview/hover flag from Task 0 snapshot must be addressed explicitly** (locate the actual computed names in VideoCard.vue / useVideoCardLogic.ts and apply this table):
+
+| Existing flag | netflix-row behavior | Reason |
+|---|---|---|
+| `props.showPreview` | AND with `isClassicVariant.value` in any consuming computed | preview UI replaced by overlay |
+| `settings.value.enableVideoPreview` | AND with `isClassicVariant.value` | global preview toggle does not apply |
+| `settings.value.onlyCoverVideoPreview` | ignored when `!isClassicVariant.value` (no cover-only preview either; overlay takes over) | overlay handles all hover output |
+| `settings.value.hoverVideoCardDelayed` | ignored when `!isClassicVariant.value`; overlay uses its own ~500ms timing | preview-specific delay irrelevant |
+| `props.previewVideoUrl` | not consumed for `netflix-row` | no preview video element rendered |
+| any `shouldLoadPreview` / `shouldShowPreviewVideo` / `hoverPreviewEnabled` (or equivalent names found via grep) computed | ALL must AND with `isClassicVariant.value` | one-line guard at every preview-gating computed |
+
+If grep surfaces additional preview/hover flags not in this table, list them in the PR description with their disposition before merging.
 
 `VideoCardHover.vue` Teleports to a target the Home container provides:
 
@@ -962,7 +980,7 @@ git commit -m "chore(release): netflix theme pack changelog and version bump"
 - Every task lists a **rollback boundary** so any single failure can be reverted without cascading.
 - TDD pattern enforced: every code-introducing task has a failing test → implementation → green test → commit.
 - No string-matching tests; behavior assertions only.
-- i18n: en + cmn-CN + cmn-TW given verbatim; jyut marked TODO for native review (avoiding low-quality auto-translation).
+- i18n: en + cmn-CN + cmn-TW given verbatim; jyut entries deliberately omitted (decision in Task 3) so vue-i18n falls back to English rather than fake-Cantonese, per BewlyCat's CONTRIBUTING.md ban on machine-translation placeholders.
 - `useDark.toggleDark` short-circuit is the resolution to the spec's "do not mutate persistent settings" decision; called out explicitly in Task 2 Step 4.
 - Wallpaper suppression covers `AppBackground.vue` (the main consumer the previous draft missed) plus TopBar and Search.
 - Singleton data composables avoid duplicate fetches between Classic and Netflix layouts.
