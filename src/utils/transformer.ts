@@ -19,12 +19,14 @@ export interface Transformer {
  * @param trigger
  * @param transformer
  */
-export function createTransformer(trigger: Ref<MaybeElement>, transformer: Transformer) {
+export function createTransformer(trigger: Ref<MaybeElement> | undefined | null, transformer: Transformer) {
   const target = ref<MaybeElement>()
   const style = ref<CSSProperties>({})
 
-  watch(() => trigger.value, (newVal) => {
-    if (transformer.notrigger && newVal) {
+  // 防御：trigger 可能因 caller 传入 undefined / 组件 unmount 后 reactive 取到
+  // null 而崩；watch 源加 null check，update() 也提前 short-circuit。
+  watch(() => (trigger ? trigger.value : undefined), (newVal) => {
+    if (transformer.notrigger && newVal && trigger) {
       try {
         target.value = unrefElement(trigger)
       }
