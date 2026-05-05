@@ -2,6 +2,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import { removeHttpFromUrl } from '~/utils/main'
+
 interface HeroVideo {
   id?: number
   title?: string
@@ -106,10 +108,10 @@ function openVideo(video: HeroVideo | null) {
     <template v-for="(video, idx) in props.videos" :key="video.bvid ?? video.aid ?? idx">
       <Transition name="hero-fade">
         <div v-show="idx === current" class="hero-banner__slide">
-          <!-- Background image -->
+          <!-- Background image (strip http: to avoid mixed-content block on HTTPS) -->
           <div
             class="hero-banner__bg"
-            :style="{ backgroundImage: `url(${video.cover})` }"
+            :style="{ backgroundImage: `url('${removeHttpFromUrl(video.cover ?? '')}')` }"
           />
           <!-- Gradient overlay -->
           <div class="hero-banner__gradient" />
