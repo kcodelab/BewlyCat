@@ -307,6 +307,12 @@ settings:
   theme_color: Theme color
   dark_mode_base_color: Dark mode base color
   gradient_theme_color_background: Use a gradient theme color as the background in dark mode
+  group_theme_pack: Theme pack
+  theme_pack: Theme pack
+  theme_pack_default: Default
+  theme_pack_netflix: Netflix
+  theme_pack_netflix_desc: Forces dark mode + Netflix red, replaces Home with row layout, hides wallpaper. Your saved theme/wallpaper are preserved.
+  theme_locked_by_pack: Locked by Netflix theme pack
   wallpaper_mode: Wallpaper mode
   wallpaper_mode_desc: >
     By URL: Choose an image from the Internet and use its URL to set it as the

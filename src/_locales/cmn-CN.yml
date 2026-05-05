@@ -336,6 +336,12 @@ settings:
   theme_color: 主题色
   dark_mode_base_color: 深色模式基准颜色
   gradient_theme_color_background: 在暗色模式下使用渐变主题颜色作为背景
+  group_theme_pack: 主题包
+  theme_pack: 主题包
+  theme_pack_default: 默认
+  theme_pack_netflix: Netflix
+  theme_pack_netflix_desc: 强制启用暗色 + Netflix 红，将首页改为 row 布局，隐藏壁纸。你保存的主题/壁纸设置不会被修改。
+  theme_locked_by_pack: 由 Netflix 主题包锁定
   wallpaper_mode: 背景图片模式
   wallpaper_mode_desc: '使用网址: 直接用网上图片的网址来设置背景图片。'
   wallpaper_mode_opt:

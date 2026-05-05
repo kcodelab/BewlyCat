@@ -1,10 +1,13 @@
 <script lang="ts" setup>
+import { useThemePack } from '~/composables/useThemePack'
 import { SEARCH_BAR_CHARACTERS } from '~/constants/imgs'
 import { settings } from '~/logic'
 
 import ChangeWallpaper from '../../components/ChangeWallpaper.vue'
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
+
+const { isNetflixThemePack } = useThemePack()
 
 watch(() => settings.value.individuallySetSearchPageWallpaper, (newValue) => {
   if (newValue)
@@ -22,7 +25,11 @@ function changeSearchBarFocusCharacter(url: string) {
   <div>
     <SettingsItemGroup :title="$t('settings.group_logo')">
       <SettingsItem :title="$t('settings.logo_color')">
-        <div w-full flex rounded="$bew-radius" bg="$bew-fill-1" p-1>
+        <div
+          w-full flex rounded="$bew-radius" bg="$bew-fill-1" p-1
+          :class="isNetflixThemePack ? 'opacity-50 pointer-events-none' : ''"
+          :title="isNetflixThemePack ? $t('settings.theme_locked_by_pack') : undefined"
+        >
           <div
             flex="1 ~" items-center justify-center py-1 cursor-pointer
             text-center rounded="$bew-radius"

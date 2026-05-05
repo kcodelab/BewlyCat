@@ -3,6 +3,8 @@ import { useThrottleFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import Select from '~/components/Select.vue'
+import { runWithViewTransition } from '~/composables/useDark'
+import { useThemePack } from '~/composables/useThemePack'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, settings } from '~/logic'
 
 import ChangeWallpaper from '../components/ChangeWallpaper.vue'
@@ -10,6 +12,15 @@ import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
 
 const { t } = useI18n()
+const { isNetflixThemePack } = useThemePack()
+
+function selectThemePack(value: 'default' | 'netflix', e: MouseEvent) {
+  if (settings.value.themePack === value)
+    return
+  runWithViewTransition(() => {
+    settings.value.themePack = value
+  }, e)
+}
 
 const themeColorOptions = computed<Array<string>>(() => {
   return [
@@ -116,12 +127,59 @@ function changeWallpaper(url: string) {
 
 <template>
   <div>
-    <SettingsItemGroup :title="$t('settings.group_color')">
-      <SettingsItem :title="$t('settings.theme')">
-        <Select v-model="settings.theme" w-full :options="themeOptions" />
+    <!-- Theme Pack selector -->
+    <SettingsItemGroup :title="$t('settings.group_theme_pack')">
+      <SettingsItem :title="$t('settings.theme_pack')">
+        <div w-full flex rounded="$bew-radius" bg="$bew-fill-1" p-1>
+          <div
+            flex="1 ~" items-center justify-center py-1 cursor-pointer
+            text-center rounded="$bew-radius"
+            :style="{
+              background: settings.themePack === 'default' || !settings.themePack ? 'var(--bew-theme-color)' : '',
+              color: settings.themePack === 'default' || !settings.themePack ? 'white' : '',
+            }"
+            @click="(e: MouseEvent) => selectThemePack('default', e)"
+          >
+            {{ $t('settings.theme_pack_default') }}
+          </div>
+          <div
+            flex="1 ~" items-center justify-center py-1 cursor-pointer
+            text-center rounded="$bew-radius"
+            :style="{
+              background: settings.themePack === 'netflix' ? 'var(--bew-theme-color)' : '',
+              color: settings.themePack === 'netflix' ? 'white' : '',
+            }"
+            @click="(e: MouseEvent) => selectThemePack('netflix', e)"
+          >
+            {{ $t('settings.theme_pack_netflix') }}
+          </div>
+        </div>
+        <template v-if="isNetflixThemePack" #bottom>
+          <div text="sm $bew-text-2">
+            {{ $t('settings.theme_pack_netflix_desc') }}
+          </div>
+        </template>
       </SettingsItem>
+    </SettingsItemGroup>
+
+    <SettingsItemGroup :title="$t('settings.group_color')">
+      <!-- theme control: disabled when Netflix pack is active -->
+      <SettingsItem :title="$t('settings.theme')">
+        <div
+          :class="isNetflixThemePack ? 'opacity-50 pointer-events-none' : ''"
+          :title="isNetflixThemePack ? $t('settings.theme_locked_by_pack') : undefined"
+        >
+          <Select v-model="settings.theme" w-full :options="themeOptions" />
+        </div>
+      </SettingsItem>
+
+      <!-- themeColor control: disabled when Netflix pack is active -->
       <SettingsItem :title="$t('settings.theme_color')">
-        <div flex="~ gap-2 wrap" justify-end>
+        <div
+          :class="isNetflixThemePack ? 'opacity-50 pointer-events-none' : ''"
+          :title="isNetflixThemePack ? $t('settings.theme_locked_by_pack') : undefined"
+          flex="~ gap-2 wrap" justify-end
+        >
           <div
             v-for="color in themeColorOptions" :key="color"
             w-20px h-20px rounded-8 cursor-pointer transition
@@ -159,8 +217,13 @@ function changeWallpaper(url: string) {
         </div>
       </SettingsItem>
 
+      <!-- darkModeBaseColor control: disabled when Netflix pack is active -->
       <SettingsItem :title="$t('settings.dark_mode_base_color')">
-        <div flex="~ gap-2 wrap" justify-end>
+        <div
+          :class="isNetflixThemePack ? 'opacity-50 pointer-events-none' : ''"
+          :title="isNetflixThemePack ? $t('settings.theme_locked_by_pack') : undefined"
+          flex="~ gap-2 wrap" justify-end
+        >
           <div
             v-for="color in darkModeBaseColorOptions" :key="color"
             w-20px h-20px rounded-8 cursor-pointer transition
@@ -198,8 +261,14 @@ function changeWallpaper(url: string) {
         </div>
       </SettingsItem>
 
+      <!-- useLinearGradientThemeColorBackground control: disabled when Netflix pack is active -->
       <SettingsItem :title="$t('settings.gradient_theme_color_background')">
-        <Radio v-model="settings.useLinearGradientThemeColorBackground" />
+        <div
+          :class="isNetflixThemePack ? 'opacity-50 pointer-events-none' : ''"
+          :title="isNetflixThemePack ? $t('settings.theme_locked_by_pack') : undefined"
+        >
+          <Radio v-model="settings.useLinearGradientThemeColorBackground" />
+        </div>
       </SettingsItem>
     </SettingsItemGroup>
 

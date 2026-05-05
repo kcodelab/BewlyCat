@@ -279,6 +279,12 @@ settings:
   theme_color: 主題色
   dark_mode_base_color: 深色模式基準顏色
   gradient_theme_color_background: 在深色模式下使用漸層主題色作為背景
+  group_theme_pack: 佈景主題包
+  theme_pack: 佈景主題包
+  theme_pack_default: 預設
+  theme_pack_netflix: Netflix
+  theme_pack_netflix_desc: 強制啟用深色 + Netflix 紅，將首頁改為 row 佈局，隱藏桌布。你儲存的主題/桌布設定不會被修改。
+  theme_locked_by_pack: 由 Netflix 佈景主題包鎖定
   wallpaper_mode: 背景圖片模式
   wallpaper_mode_desc: '使用網址: 直接使用網路圖片的網址來設定背景圖片。'
   wallpaper_mode_opt:
