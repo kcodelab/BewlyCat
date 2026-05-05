@@ -853,6 +853,7 @@ home:
   uploaders_with_updates: no uploader with updates | {count} uploader with updates | {count} uploaders with updates
   continue_watching: Continue Watching
   top10_today: Top 10 Today
+  channels: Channels
 ranking:
   all: All
   original_content: Original Content

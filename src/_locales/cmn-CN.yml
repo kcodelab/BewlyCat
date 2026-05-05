@@ -778,6 +778,7 @@ home:
   uploaders_with_updates: '{count}个UP主有更新'
   continue_watching: 继续观看
   top10_today: 今日 TOP 10
+  channels: 频道
 ranking:
   all: 全部
   original_content: 原创内容

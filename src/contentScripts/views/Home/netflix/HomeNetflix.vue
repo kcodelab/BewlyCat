@@ -14,6 +14,7 @@ import { useSubscribedSeriesData } from '../composables/useSubscribedSeriesData'
 import { useTrendingData } from '../composables/useTrendingData'
 import { useWeeklyData } from '../composables/useWeeklyData'
 import { HomeSubPage } from '../types'
+import ChannelsGrid from './ChannelsGrid.vue'
 import ContinueWatchingRow from './ContinueWatchingRow.vue'
 import HeroBanner from './HeroBanner.vue'
 import { pickHeroCandidates } from './heroUtils'
@@ -201,6 +202,9 @@ onMounted(async () => {
         @retry="handleRowRetry(row.page)"
       />
     </template>
+
+    <!-- Channels Grid -->
+    <ChannelsGrid />
   </div>
 </template>
 
