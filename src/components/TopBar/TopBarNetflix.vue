@@ -45,7 +45,7 @@ const internalNavItems = [
 
 // External nav items (navigate same-tab to bilibili partition pages)
 const externalNavItems = [
-  { labelKey: 'topbar.nav_movie', url: 'https://www.bilibili.com/v/cinephile/movie/', urlPattern: /\/v\/cinephile\// },
+  { labelKey: 'topbar.nav_movie', url: 'https://www.bilibili.com/movie/', urlPattern: /^https?:\/\/(?:www\.)?bilibili\.com\/movie(\/|$)/ },
   { labelKey: 'topbar.nav_game', url: 'https://www.bilibili.com/v/game/', urlPattern: /\/v\/game(?!shore)/ },
   { labelKey: 'topbar.nav_tech', url: 'https://www.bilibili.com/v/tech/', urlPattern: /\/v\/tech\// },
 ] as const
