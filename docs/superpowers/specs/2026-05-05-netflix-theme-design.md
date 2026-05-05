@@ -47,19 +47,20 @@ themePack='netflix' 启用时：
      - 当 `themePack='netflix'` 时，运行时外观强制按 dark 解析
      - 切回 default 时仅移除 override，用户原 theme 偏好天然生效
      - `useDark.toggleDark` 在 Netflix 模式下短路：不再写 `settings.value.theme`
-     - 设置面板的明暗切换器在 Netflix 模式下显示但禁用，hover 时提示"由 Netflix 主题包锁定"
+     - 所有调用 `useDark.toggleDark` 的可见入口都必须表现一致：Settings / Dock / SideBar 等入口在 Netflix 模式下显示但禁用，或给出统一的 locked 提示；不允许出现“还能点但无效果”的 no-op 按钮
 
   ⑤ Netflix 主题包内部引入「effective wallpaper suppression」：
      - 不改写 `settings.wallpaper` / `settings.searchPageWallpaper`
      - 仅在运行时屏蔽对壁纸的读取与渲染
      - 切回 default 时壁纸配置天然恢复
-     - 必须覆盖至少 3 个消费点：`AppBackground.vue`（壁纸主消费者）、`useTopBarInteraction`（顶栏透明度判断）、Search 页 `searchPageWallpaper`
+     - 必须覆盖至少 4 个真实消费点：`AppBackground.vue`（壁纸主消费者）、`useTopBarInteraction`（顶栏透明度判断）、Home 搜索页模式背景（`Home.vue` 内 `settings.searchPageWallpaper` 的直读路径）、Search 页 `searchPageWallpaper`
 
   ⑥ Netflix 主题包内部引入「effective theme color override」：
      - 不改写 `settings.themeColor` / `darkModeBaseColor` / `useLinearGradientThemeColorBackground` / `searchPageLogoColor`
      - 运行时强制：themeColor → `#E50914`、darkModeBaseColor → `#141414`、useLinearGradientThemeColorBackground → `false`、searchPageLogoColor → `'themeColor'`（此时 effective themeColor 已是 Netflix 红）
      - 现有所有 `--bew-theme-color` / `--bew-dark-base-color` 等 CSS 变量都从 effective 值派生
      - 切回 default 时用户原配色完整恢复
+     - Appearance 设置里对应控件保持可见但禁用，并提示"由 Netflix 主题包锁定"，避免用户修改后无即时效果
 ```
 
 ### 关键设计原则
@@ -141,6 +142,16 @@ Netflix Home 默认显示以下 row（顺序从上到下）：
 
 第一版从 Trending 列表里挑第一条「图分≥某阈值」的视频，规避 Trending 头条但封面文字过多的情况。Trending 接口失败时回退到 ForYou 第一条。两个都失败则跳过 Hero、直接展示第一个 row（不阻塞首屏）。
 
+若实现 Hero carousel，则第一版规则固定如下：
+
+- 最多 3 张 slide
+- 先扫描 Trending，按原有顺序取出 `coverScore >= 60` 的候选
+- 若 Trending 不足 3 张，再按原有顺序从 ForYou 补齐同样满足 `coverScore >= 60` 的候选
+- 若某数据源缺少 `coverScore` 字段，则该条只允许在“整个列表都没有分数可用”时参与候选，避免无分数条目压过已评分条目
+- 若最终只有 1 张有效候选，则降级为单张静态 Hero，不启用轮播控件
+- 若最终有 2-3 张有效候选，则启用轮播；不足 3 张时不重复补位、不造假数据
+- Trending 与 ForYou 去重按视频唯一 id 处理，避免同一视频重复出现在多张 slide
+
 ## 卡片悬停浮层
 
 参考 Netflix 但简化：
@@ -174,8 +185,9 @@ Netflix Home 默认显示以下 row（顺序从上到下）：
 实现约束：
 
 - 仅隐藏设置项或禁用输入控件是不够的，必须在运行时渲染分支中统一屏蔽壁纸读取
-- 至少覆盖两个入口：Home 背景渲染、TopBar 对“当前是否有壁纸”的判断逻辑
+- 至少覆盖四个入口：`AppBackground.vue`、Home 搜索页模式背景、TopBar 对“当前是否有壁纸”的判断逻辑、Search 页 wallpaper 渲染
 - 不清空用户原壁纸 URL / 本地壁纸引用，避免切回 default 时丢状态
+- `theme` / `themeColor` / `darkModeBaseColor` / `useLinearGradientThemeColorBackground` 相关控件在 Netflix 模式下统一禁用，并展示锁定提示；用户保存值不改写
 
 ## 错误与降级
 
@@ -252,7 +264,8 @@ Netflix Home 默认显示以下 row（顺序从上到下）：
 | Hero 自动播放预览（如果做）拖慢首屏 | 第一版只用静态图，预览功能延后 |
 | Trending 接口偶发返回封面差的视频 | Hero 选第一个图分 ≥ 60 的；都不行就降级到 ForYou 头条；再不行跳过 Hero |
 | themePack 改写持久化设置导致用户偏好丢失 | 决议 #2 / #7 / #8：所有派生项走 effective override，不改写 `settings.*` |
-| 仅在设置 UI 隐藏 Wallpaper 但运行时仍继续渲染 | 决议 #7：覆盖 3 个真实消费点（AppBackground / TopBar / Search） |
+| 仅在设置 UI 隐藏 Wallpaper 但运行时仍继续渲染 | 决议 #7：覆盖 4 个真实消费点（AppBackground / Home 搜索页模式 / TopBar / Search） |
+| Netflix 模式下颜色与渐变控件仍可编辑，造成“能改但不生效” | 对被主题包接管的 Appearance 控件统一禁用并加锁定提示 |
 | `useDark.toggleDark` 直接写 `settings.theme` 与"不改写"原则冲突 | 决议 #2：toggleDark 在 Netflix 模式下短路，仅触发 view-transition |
 | 数据 composable 在 Classic / Netflix 切换时重复请求或内存泄漏 | 决议 #9：状态提到模块作用域，单例化 |
 | 首次切到 Netflix 时 defineAsyncComponent 加载延迟与 view-transition 重叠出现白屏 | 决议 #10：配 loadingComponent + delay:0 |
@@ -270,7 +283,8 @@ Netflix Home 默认显示以下 row（顺序从上到下）：
 4. 卡片悬停浮层不实现「推开邻居」；浮层用 Vue `<Teleport>` 送到 Home 容器顶层，规避 `HorizontalRow` 的 `overflow-x: auto` 裁切（CSS 规范下 `overflow-x: auto` 会强制 `overflow-y` 也为 auto）
 5. 「+ 我的列表」按钮直接复用现有「加入稍后再看」按钮的图标与 i18n 文案，不新增 i18n 键
 6. Row 顺序：以 `settings.homePageTabVisibilityList` 当前顺序为准，**Hero 固定在最顶，「继续观看」紧随其后，「TOP 10」固定插在所有 SubPage row 之前**
-7. Netflix 模式抑制壁纸；effective wallpaper suppression 必须覆盖至少 3 个消费点：`AppBackground.vue`（壁纸主消费者）、`useTopBarInteraction`（顶栏透明度判断）、Search 页面的 `searchPageWallpaper` 渲染入口；切回 default 时壁纸自动恢复
+7. Netflix 模式抑制壁纸；effective wallpaper suppression 必须覆盖至少 4 个消费点：`AppBackground.vue`（壁纸主消费者）、`useTopBarInteraction`（顶栏透明度判断）、Home 搜索页模式背景（`Home.vue` 内 `settings.searchPageWallpaper` 的直读路径）、Search 页面的 `searchPageWallpaper` 渲染入口；切回 default 时壁纸自动恢复
 8. **主色相关字段（`themeColor` / `darkModeBaseColor` / `useLinearGradientThemeColorBackground` / `searchPageLogoColor`）全部走 effective override**，不改写持久化设置；Netflix 模式锁定 themeColor=`#E50914`、darkModeBaseColor=`#141414`、useLinearGradientThemeColorBackground=`false`、searchPageLogoColor=`'themeColor'`；现有所有 `--bew-theme-color` / `--bew-dark-base-color` CSS 变量从 effective 值派生
+   对应 Appearance 控件保持可见但禁用，并展示"由 Netflix 主题包锁定"提示，避免用户误以为修改即时生效
 9. **共享数据缓存**：所有 Home 数据 composable 状态提到模块作用域（或用 VueUse 的 `createSharedComposable`），保证 HomeClassic 与 HomeNetflix 共享同一份 reactive state，避免重复请求和内存泄漏
 10. **Netflix 视图懒加载必须配 `loadingComponent`** + `delay: 0`：首次切换会触发 view-transition，缺 loadingComponent 会出现可观察白屏夹在过渡动画里

@@ -88,6 +88,9 @@ Output of this snapshot lives in PR description, not in code.
   Responsibility: add the Theme Pack selector + descriptive copy; disable every Appearance control whose runtime effect is owned by the pack (`theme`, `themeColor`, `darkModeBaseColor`, `useLinearGradientThemeColorBackground`) and show the locked-by-pack hint.
 - Modify: `src/components/Settings/PluginComponentsAndPages/SearchPage/SearchPage.vue`
   Responsibility: disable the `searchPageLogoColor` controls (the two logo color buttons) when `themePack === 'netflix'` and show the locked-by-pack hint, mirroring Appearance.vue behavior. Decision #8 effective-overrides this value at runtime, so the UI must not let users change it without effect.
+- Modify: `src/components/Dock/Dock.vue`
+- Modify: `src/components/SideBar/SideBar.vue`
+  Responsibility: any visible entry that calls `toggleDark` must also show locked behavior in Netflix mode rather than becoming a silent no-op.
 - Modify: `src/_locales/en.yml`, `src/_locales/cmn-CN.yml`, `src/_locales/cmn-TW.yml`, `src/_locales/jyut.yml`
   Responsibility: add i18n strings for Theme Pack UI in all four locales; if fluent Cantonese text is unavailable, `jyut.yml` may temporarily mirror an already-translated Chinese variant and the PR must call that out explicitly.
 - Create: `src/tests/themePack.spec.ts`
@@ -413,11 +416,13 @@ git commit -m "feat(theme-pack): route appearance/wallpaper consumers through ef
 
 ## Task 3: Settings UI
 
-**Goal:** Add the Theme Pack selector. When `themePack === 'netflix'`, disable every Appearance control whose runtime effect is overridden by the pack, with a tooltip explaining the lock.
+**Goal:** Add the Theme Pack selector. When `themePack === 'netflix'`, disable every user-visible control whose runtime effect is overridden by the pack, with a tooltip explaining the lock.
 
 **Files:**
 - Modify: `src/components/Settings/Appearance/Appearance.vue`
 - Modify: `src/components/Settings/PluginComponentsAndPages/SearchPage/SearchPage.vue`
+- Modify: `src/components/Dock/Dock.vue`
+- Modify: `src/components/SideBar/SideBar.vue`
 - Modify: `src/_locales/en.yml`
 - Modify: `src/_locales/cmn-CN.yml`
 - Modify: `src/_locales/cmn-TW.yml`
@@ -426,6 +431,7 @@ git commit -m "feat(theme-pack): route appearance/wallpaper consumers through ef
 - [ ] **Step 1: Add UI** — radio group (themePack) bound to `settings.themePack` in `Appearance.vue`. When `settings.themePack === 'netflix'`, disable + lock-tooltip the following controls (decisions #2 / #8 effective-override these at runtime):
   - In `Appearance.vue`: `theme`, `themeColor`, `darkModeBaseColor`, `useLinearGradientThemeColorBackground`
   - In `SearchPage.vue`: the two `searchPageLogoColor` buttons
+  - In `Dock.vue` and `SideBar.vue`: theme toggle buttons that call `toggleDark`
 
 - [ ] **Step 2: Add i18n keys in all four locales** (do not auto-translate; native or careful manual translation only):
 
@@ -478,7 +484,7 @@ pnpm typecheck
 pnpm lint
 ```
 
-Manual: open the extension, switch themePack twice, confirm the page transitions and that `theme`, `themeColor`, `darkModeBaseColor`, and gradient controls all grey out under Netflix.
+Manual: open the extension, switch themePack twice, confirm the page transitions and that `theme`, `themeColor`, `darkModeBaseColor`, gradient, `searchPageLogoColor`, Dock theme toggle, and SideBar theme toggle all show locked behavior under Netflix.
 
 - [ ] **Step 5: Commit**
 
@@ -925,7 +931,12 @@ git commit -m "feat(theme-pack): video card netflix-row variant + teleported hov
 - (any small helper additions as needed)
 
 - [ ] Implement TOP 10 numbers as inline SVG (matrix uses `clamp(120px, 18vw, 240px)`)
-- [ ] Implement Hero carousel (3 slides, 8s rotate, pause on hover, mute toggle)
+- [ ] Implement Hero carousel using the fixed spec rule:
+  - collect up to 3 unique candidates
+  - prefer Trending items with `coverScore >= 60`
+  - backfill from ForYou with the same threshold
+  - if only 1 valid candidate remains, render static Hero and do not show carousel controls
+  - if 2-3 valid candidates remain, enable carousel without duplicating items
 - [ ] Implement progress bar on Continue Watching cards
 - [ ] Implement NEW/N badges (CSS-only)
 - [ ] Manual verification against mockup
