@@ -21,6 +21,17 @@ const emit = defineEmits<{
   retry: []
 }>()
 
+// NEW badge: show for videos published in the last 7 days
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+function isNew(video: Video): boolean {
+  if (!video.publishedTimestamp)
+    return false
+  // publishedTimestamp is in seconds (Unix epoch)
+  const pubMs = video.publishedTimestamp * 1000
+  return Date.now() - pubMs <= SEVEN_DAYS_MS
+}
+
 const rowRef = ref<HTMLElement | null>(null)
 
 function scrollLeft() {
@@ -81,6 +92,10 @@ function scrollRight() {
             :key="item.bvid ?? item.id"
             class="netflix-row__card-wrapper"
           >
+            <!-- NEW badge overlay (last 7 days) — wrapper-level, does NOT touch VideoCard.vue -->
+            <div v-if="isNew(item)" class="netflix-row__new-badge" aria-label="新上线">
+              NEW
+            </div>
             <VideoCard :video="item" variant="netflix-row" />
           </div>
         </template>
@@ -131,6 +146,25 @@ function scrollRight() {
 .netflix-row__card-wrapper {
   flex: 0 0 220px;
   min-width: 0;
+  position: relative;
+}
+
+/* NEW badge — top-left corner of the card wrapper */
+.netflix-row__new-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  background: #e50914;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 5px;
+  border-radius: 2px;
+  line-height: 1.4;
+  pointer-events: none;
+  text-transform: uppercase;
 }
 
 .netflix-row__skeleton {

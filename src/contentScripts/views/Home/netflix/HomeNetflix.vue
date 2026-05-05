@@ -16,7 +16,7 @@ import { useWeeklyData } from '../composables/useWeeklyData'
 import { HomeSubPage } from '../types'
 import ContinueWatchingRow from './ContinueWatchingRow.vue'
 import HeroBanner from './HeroBanner.vue'
-import { pickHeroCandidate } from './heroUtils'
+import { pickHeroCandidates } from './heroUtils'
 import HorizontalRow from './HorizontalRow.vue'
 import Top10Row from './Top10Row.vue'
 
@@ -30,10 +30,10 @@ const live = useLiveData()
 const precious = usePreciousData()
 
 // ── Hero selection ─────────────────────────────────────────────────
-const heroVideo = computed(() => {
+const heroVideos = computed(() => {
   const trendingVideos = trending.items.value.map(el => el.displayData).filter(Boolean) as any[]
   const forYouVideos = forYou.videoList.value.map(el => el.displayData).filter(Boolean) as any[]
-  return pickHeroCandidate(trendingVideos, forYouVideos)
+  return pickHeroCandidates(trendingVideos, forYouVideos, 3)
 })
 
 // ── Row registry ───────────────────────────────────────────────────
@@ -182,7 +182,7 @@ onMounted(async () => {
 <template>
   <div ref="hoverTargetRef" class="netflix-home" style="position: relative;">
     <!-- Hero Banner -->
-    <HeroBanner :video="heroVideo" />
+    <HeroBanner :videos="heroVideos" />
 
     <!-- Continue Watching Row -->
     <ContinueWatchingRow />
