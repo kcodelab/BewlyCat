@@ -216,7 +216,7 @@ async function handleWatchLater() {
 .netflix-card-hover {
   border-radius: 6px;
   overflow: hidden;
-  background: #141414;
+  background: var(--bew-bg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
   pointer-events: auto;
   /* Prevent clicks from propagating to card below */

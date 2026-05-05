@@ -177,7 +177,7 @@ function openVideo(video: HeroVideo | null) {
   max-height: 80vh;
   min-height: 300px;
   overflow: hidden;
-  background: #141414;
+  background: var(--bew-bg);
   margin-bottom: 2.5rem;
 }
 

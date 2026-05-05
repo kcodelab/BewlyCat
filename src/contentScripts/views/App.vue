@@ -380,6 +380,13 @@ injectCSS(`
   body.bewly-netflix-mode {
     padding-top: var(--bew-top-bar-height, 60px) !important;
   }
+  /* 统一 Netflix 模式下的背景色为 #141414（Netflix 标准黑），
+     避免 var(--bew-bg) 默认 color-mix 让 TopBar 与 Home 内容区出现可见分层 */
+  body.bewly-netflix-mode,
+  body.bewly-netflix-mode #bewly {
+    --bew-bg: #141414;
+    --bew-homepage-bg: #141414;
+  }
 `)
 
 watch([() => showTopBar.value, () => activatedPage.value, () => isNetflixThemePack.value], () => {

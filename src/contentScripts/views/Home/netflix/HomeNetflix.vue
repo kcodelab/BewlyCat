@@ -206,7 +206,7 @@ onMounted(async () => {
 
 <style scoped>
 .netflix-home {
-  background: #141414;
+  background: var(--bew-bg);
   min-height: 100vh;
   padding-bottom: 2rem;
 }
