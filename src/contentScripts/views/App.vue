@@ -264,6 +264,10 @@ const iframePageURL = computed((): string => {
   // If the iframe is not the BiliBili homepage or in iframe, then don't show the iframe page
   if (!isHomePage(window.self.location.href) || isInIframe())
     return ''
+  // Netflix 主题包模式下不使用 iframe 页面：Netflix TopBar 的内部导航始终展示
+  // BewlyCat 页面，不受 dock 的 useOriginalBiliPage 设置影响。
+  if (isNetflixThemePack.value)
+    return ''
   const currentDockItemConfig = settings.value.dockItemsConfig.find(e => e.page === activatedPage.value)
   if (currentDockItemConfig) {
     return currentDockItemConfig.useOriginalBiliPage || !mainStore.getDockItemByPage(activatedPage.value)?.hasBewlyPage ? mainStore.getBiliWebPageURLByPage(activatedPage.value) : ''
