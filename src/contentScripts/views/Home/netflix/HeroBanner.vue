@@ -134,10 +134,12 @@ function openVideo(video: HeroVideo | null) {
         </p>
         <div class="hero-banner__actions">
           <button class="hero-banner__btn hero-banner__btn--play" @click="openVideo(currentVideo)">
-            ▶ 播放
+            <i class="hero-banner__btn-icon i-mingcute:play-fill" />
+            <span>播放</span>
           </button>
           <button class="hero-banner__btn hero-banner__btn--info" @click="openVideo(currentVideo)">
-            ℹ 更多信息
+            <i class="hero-banner__btn-icon i-mingcute:information-line" />
+            <span>更多信息</span>
           </button>
         </div>
       </div>
@@ -240,17 +242,35 @@ function openVideo(video: HeroVideo | null) {
 }
 
 .hero-banner__btn {
-  padding: 0.5rem 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 1.6rem;
   border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 6px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s,
+    transform 0.1s;
+  user-select: none;
 }
 
 .hero-banner__btn:hover {
   opacity: 0.85;
+}
+
+.hero-banner__btn:active {
+  transform: scale(0.98);
+}
+
+.hero-banner__btn-icon {
+  width: 1.35em;
+  height: 1.35em;
+  flex-shrink: 0;
 }
 
 .hero-banner__btn--play {
@@ -261,6 +281,11 @@ function openVideo(video: HeroVideo | null) {
 .hero-banner__btn--info {
   background: rgba(109, 109, 110, 0.7);
   color: #fff;
+}
+
+.hero-banner__btn--info:hover {
+  background: rgba(109, 109, 110, 0.85);
+  opacity: 1;
 }
 
 /* ── Pagination dots ─────────────────────────────── */
