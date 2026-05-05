@@ -6,6 +6,7 @@ import { computed, ref } from 'vue'
 import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
+import { useThemePack } from '~/composables/useThemePack'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -32,6 +33,7 @@ const emit = defineEmits<{
 
 const mainStore = useMainStore()
 const { isDark, toggleDark } = useDark()
+const { isNetflixThemePack } = useThemePack()
 const { reachTop, homeActivatedPage, undoForwardState } = useBewlyApp()
 
 // 计算属性：是否显示撤销按钮
@@ -531,6 +533,8 @@ onUnmounted(() => {
             bg="!dark-hover:$bew-bg" transform="!dark-hover:scale-100"
             :shadow="settings.disableDockGlowingEffect ? 'none' : '!dark-hover:[inset_4px_-2px_8px_hsla(226deg,85%,77%,1)]'"
             pointer-events-auto
+            :class="isNetflixThemePack ? 'opacity-50 pointer-events-none' : ''"
+            :title="isNetflixThemePack ? $t('settings.theme_locked_by_pack') : ''"
             @click="toggleDark"
             @mouseenter="hoveringDockItem.themeMode = true"
             @mouseleave="hoveringDockItem.themeMode = false"

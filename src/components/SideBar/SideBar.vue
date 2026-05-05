@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue'
 
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
+import { useThemePack } from '~/composables/useThemePack'
 import { settings } from '~/logic'
 
 import Tooltip from '../Tooltip.vue'
@@ -10,6 +11,7 @@ import type { HoveringDockItem } from './types'
 
 const emit = defineEmits(['settingsVisibilityChange'])
 const { isDark, toggleDark } = useDark()
+const { isNetflixThemePack } = useThemePack()
 
 const hideSidebar = ref<boolean>(false)
 const sideBarContentHover = ref<boolean>(false)
@@ -83,6 +85,8 @@ function toggleHideSidebar(hide: boolean) {
           class="ctrl-btn"
           style="backdrop-filter: var(--bew-filter-glass-1);"
           center size="small" round
+          :class="isNetflixThemePack ? 'opacity-50 pointer-events-none' : ''"
+          :title="isNetflixThemePack ? $t('settings.theme_locked_by_pack') : ''"
           @click="toggleDark"
           @mouseenter="hoveringDockItem.themeMode = true"
           @mouseleave="hoveringDockItem.themeMode = false"
