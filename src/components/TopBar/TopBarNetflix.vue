@@ -234,19 +234,21 @@ function handleOpenSettings() {
   /* 顶部置顶时：透明 + 自上而下渐变（黑→透明），让顶部文字可读但不挡 hero */
   background-color: transparent;
   background-image: linear-gradient(to bottom, rgba(20, 20, 20, 0.7) 0%, rgba(20, 20, 20, 0) 100%);
-  border-bottom: 1px solid transparent;
+  /* 不用 border-bottom（1px transparent 边框在某些浏览器仍渲染出可见的细横线）。
+     滚动后用 box-shadow 做下分割，不占布局空间 */
+  border: 0;
+  box-shadow: none;
   transition:
     background-color 0.25s ease,
     background-image 0.25s ease,
-    border-bottom-color 0.25s ease;
-  /* Backdrop 透明时不需要 backdrop-filter，避免性能浪费 */
+    box-shadow 0.25s ease;
 }
 
-/* 滚动超过阈值后：填纯色 + 显示分隔底边 */
+/* 滚动超过阈值后：填纯色 + 显示极轻的下分隔阴影 */
 .netflix-topbar--scrolled {
   background-color: var(--bew-bg);
   background-image: none;
-  border-bottom-color: var(--bew-border-color, rgba(255, 255, 255, 0.06));
+  box-shadow: 0 1px 0 var(--bew-border-color, rgba(255, 255, 255, 0.08));
 }
 
 .netflix-topbar__inner {
