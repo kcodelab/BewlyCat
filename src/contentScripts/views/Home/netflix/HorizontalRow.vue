@@ -125,7 +125,6 @@ function scrollRight() {
   font-weight: 700;
   color: #e5e5e5;
   margin-bottom: 0.5rem;
-  padding: 0 2rem;
   display: flex;
   align-items: center;
 }
@@ -149,7 +148,7 @@ function scrollRight() {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
-  padding: 0.5rem 2rem;
+  padding: 0.5rem 0;
   scrollbar-width: none;
 }
 

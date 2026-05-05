@@ -130,7 +130,6 @@ function getPath(digit: string): string {
   font-weight: 700;
   color: #e5e5e5;
   margin-bottom: 0.5rem;
-  padding: 0 2rem;
   display: flex;
   align-items: center;
 }
@@ -147,7 +146,7 @@ function getPath(digit: string): string {
 }
 
 .top10-row__error {
-  padding: 1rem 2rem;
+  padding: 1rem 0;
   color: #aaa;
 }
 
@@ -163,7 +162,7 @@ function getPath(digit: string): string {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
-  padding: 0.5rem 2rem 1rem;
+  padding: 0.5rem 0 1rem;
   scrollbar-width: none;
 }
 

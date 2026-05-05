@@ -208,6 +208,6 @@ onMounted(async () => {
 .netflix-home {
   background: var(--bew-bg);
   min-height: 100vh;
-  padding-bottom: 2rem;
+  padding: 0 2rem 2rem;
 }
 </style>
