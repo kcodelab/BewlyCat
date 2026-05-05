@@ -36,7 +36,6 @@ const currentVideo = computed(() => {
 // ── Auto-rotate ────────────────────────────────────────────────────
 let timer: ReturnType<typeof setInterval> | null = null
 const isPaused = ref(false)
-const isMuted = ref(true)
 
 function startTimer() {
   if (!isCarousel.value)
@@ -72,10 +71,6 @@ function onMouseLeave() {
   isPaused.value = false
 }
 
-function toggleMute() {
-  isMuted.value = !isMuted.value
-}
-
 onMounted(() => {
   if (isCarousel.value)
     startTimer()
@@ -101,8 +96,6 @@ function openVideo(video: HeroVideo | null) {
   <div
     v-if="hasItems"
     class="hero-banner"
-    @mouseenter="onMouseEnter"
-    @mouseleave="onMouseLeave"
   >
     <!-- Slides (crossfade via v-show) -->
     <template v-for="(video, idx) in props.videos" :key="video.bvid ?? video.aid ?? idx">
@@ -125,6 +118,8 @@ function openVideo(video: HeroVideo | null) {
         v-if="currentVideo"
         :key="currentVideo.bvid ?? currentVideo.aid ?? current"
         class="hero-banner__content"
+        @mouseenter="onMouseEnter"
+        @mouseleave="onMouseLeave"
       >
         <h1 class="hero-banner__title">
           {{ currentVideo.title }}
@@ -158,17 +153,6 @@ function openVideo(video: HeroVideo | null) {
           @click="goTo(idx)"
         />
       </div>
-
-      <!-- Mute / Unmute button (UI placeholder — no actual audio in this version) -->
-      <button
-        class="hero-banner__mute-btn"
-        :aria-label="isMuted ? '取消静音' : '静音'"
-        :title="isMuted ? '取消静音' : '静音'"
-        @click="toggleMute"
-      >
-        <span v-if="isMuted" class="hero-banner__mute-icon">🔇</span>
-        <span v-else class="hero-banner__mute-icon">🔊</span>
-      </button>
     </template>
   </div>
 </template>
@@ -185,12 +169,14 @@ function openVideo(video: HeroVideo | null) {
   /* 让 Hero 顶起到屏幕顶部，TopBar 半透明叠在上面（与 App.vue 的
      padding-top: top-bar-height + 10px 抵消） */
   margin-top: calc(-1 * (var(--bew-top-bar-height, 60px) + 10px));
-  height: 56.25vw;
-  max-height: 92vh;
-  min-height: 320px;
+  /* 高度收敛：以宽屏 16:9 为基准，但限制最大 60vh、最小 280px，
+     避免超大屏幕下 Hero 占满整个视口造成压迫 */
+  height: 42vw;
+  max-height: 60vh;
+  min-height: 280px;
   overflow: hidden;
   background: var(--bew-bg);
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
 }
 
 /* ── Slides ─────────────────────────────────────── */
@@ -210,11 +196,32 @@ function openVideo(video: HeroVideo | null) {
 .hero-banner__gradient {
   position: absolute;
   inset: 0;
-  /* 顶部多一道淡黑做 TopBar 让位（让透明顶栏文字在亮色封面上仍可读），
-     底部继续渐入纯黑融入页面背景 */
+  /* 顶部一道淡黑做 TopBar 让位（让透明顶栏文字在亮色封面上仍可读），
+     底部柔和长渐变融入页面背景，避免硬边 */
   background:
     linear-gradient(to bottom, rgba(20, 20, 20, 0.55) 0%, rgba(20, 20, 20, 0) 18%),
-    linear-gradient(to bottom, transparent 40%, rgba(20, 20, 20, 0.6) 70%, rgba(20, 20, 20, 0.95) 100%);
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 30%,
+      rgba(20, 20, 20, 0.35) 55%,
+      rgba(20, 20, 20, 0.7) 80%,
+      var(--bew-bg) 100%
+    );
+}
+
+/* 底部磨砂渐变过度：在 Hero 容器最下方再叠一道极柔的边缘虚化，
+   让 Hero 与下方 row 之间的过渡看起来不那么硬 */
+.hero-banner::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 60px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--bew-bg));
+  z-index: 1;
 }
 
 /* ── Content ─────────────────────────────────────── */
@@ -326,37 +333,6 @@ function openVideo(video: HeroVideo | null) {
 .hero-banner__dot--active {
   background: #fff;
   width: 20px;
-}
-
-/* ── Mute button ─────────────────────────────────── */
-.hero-banner__mute-btn {
-  position: absolute;
-  bottom: 4rem;
-  right: 4%;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
-}
-
-.hero-banner__mute-btn:hover {
-  border-color: #fff;
-  background: rgba(0, 0, 0, 0.65);
-}
-
-.hero-banner__mute-icon {
-  font-size: 1rem;
-  line-height: 1;
 }
 
 /* ── Transitions ─────────────────────────────────── */
