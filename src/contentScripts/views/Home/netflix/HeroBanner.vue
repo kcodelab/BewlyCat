@@ -178,6 +178,7 @@ function openVideo(video: HeroVideo | null) {
   min-height: 300px;
   overflow: hidden;
   background: #141414;
+  margin-bottom: 2.5rem;
 }
 
 /* ── Slides ─────────────────────────────────────── */
