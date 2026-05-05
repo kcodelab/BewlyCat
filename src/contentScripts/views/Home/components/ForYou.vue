@@ -1,22 +1,16 @@
 <script setup lang="ts">
 import { onKeyStroke } from '@vueuse/core'
-import { useToast } from 'vue-toastification'
 
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
-import { FilterType, useFilter } from '~/composables/useFilter'
-import { LanguageType } from '~/enums/appEnums'
 import type { GridLayoutType } from '~/logic'
-import { appAuthTokens, settings } from '~/logic'
-import type { AppForYouResult, Item as AppVideoItem } from '~/models/video/appForYou'
+import { settings } from '~/logic'
+import type { Item as AppVideoItem } from '~/models/video/appForYou'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
-import type { forYouResult, Item as VideoItem } from '~/models/video/forYou'
-import type { AppVideoElement, VideoCardDisplayData, VideoElement } from '~/stores/forYouStore'
+import type { AppVideoElement, VideoElement } from '~/stores/forYouStore'
 import { useForYouStore } from '~/stores/forYouStore'
-import api from '~/utils/api'
-import { TVAppKey } from '~/utils/authProvider'
-import { decodeHtmlEntities } from '~/utils/htmlDecode'
-import { isVerticalVideo } from '~/utils/uriParse'
+
+import { useForYouData } from '../composables/useForYouData'
 
 const { gridLayout } = defineProps<{
   gridLayout: GridLayoutType
@@ -27,98 +21,46 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-const toast = useToast()
 const forYouStore = useForYouStore()
 
-const filterFunc = useFilter(
-  ['is_followed'],
-  [
-    FilterType.duration,
-    FilterType.viewCount,
-    FilterType.likeCount,
-    FilterType.title,
-    FilterType.user,
-    FilterType.user,
-    FilterType.publishTime,
-  ],
-  [
-    ['duration'],
-    ['stat', 'view'],
-    ['stat', 'like'],
-    ['title'],
-    ['owner', 'name'],
-    ['owner', 'mid'],
-    ['pubdate'],
-  ],
-)
+const {
+  videoList,
+  appVideoList,
+  isLoading,
+  requestFailed,
+  needToLoginFirst,
+  noMoreContent,
+  refreshIdx,
+  consecutiveEmptyLoads,
+  appConsecutiveEmptyLoads,
+  isRecursiveLoading,
+  scrollLoadStartLength,
+  APP_LOAD_BATCHES,
+  getData,
+  initData: composableInitData,
+} = useForYouData()
 
-const appFilterFunc = useFilter(
-  ['bottom_rcmd_reason'],
-  [
-    FilterType.filterOutVerticalVideos,
-    FilterType.duration,
-    FilterType.viewCountStr,
-    FilterType.title,
-    FilterType.user,
-    FilterType.user,
-  ],
-  [
-    ['uri'],
-    ['player_args', 'duration'],
-    ['cover_left_text_1'],
-    ['title'],
-    ['mask', 'avatar', 'text'],
-    ['mask', 'avatar', 'up_id'],
-  ],
-)
-
-const { handleReachBottom, handlePageRefresh, haveScrollbar, undoForwardState, handleUndoRefresh, handleForwardRefresh, handleBackToTop, scrollViewportRef } = useBewlyApp()
-
-// 先声明数据变量
-const videoList = ref<VideoElement[]>([])
-const appVideoList = ref<AppVideoElement[]>([])
+const { handleReachBottom, handlePageRefresh, undoForwardState, handleUndoRefresh, handleForwardRefresh, handleBackToTop, scrollViewportRef } = useBewlyApp()
 
 // 当前使用的视频列表（根据推荐模式）
 const currentVideoList = computed(() =>
   settings.value.recommendationMode === 'web' ? videoList.value : appVideoList.value,
 )
 
-const isLoading = ref<boolean>(false)
-const requestFailed = ref<boolean>(false)
-const needToLoginFirst = ref<boolean>(false)
-const refreshIdx = ref<number>(1)
-const noMoreContent = ref<boolean>(false)
 const activatedAppVideo = ref<AppVideoItem | null>()
 const showDislikeDialog = ref<boolean>(false)
-
-// 页面可见性状态
 const isPageVisible = ref<boolean>(!document.hidden)
 const selectedDislikeReason = ref<number>(1)
 
-// 修改缓存数据变量，添加前进状态变量
+// 修改缓存数据变量，添加前进状态变量（组件级 UI 状态，不抽入 composable）
 const cachedVideoList = ref<VideoElement[]>([])
 const cachedRefreshIdx = ref<number>(1)
-
-// 添加前进状态变量
 const forwardVideoList = ref<VideoElement[]>([])
 const forwardRefreshIdx = ref<number>(1)
-
-// APP 模式的缓存和前进状态变量
 const cachedAppVideoList = ref<AppVideoElement[]>([])
 const forwardAppVideoList = ref<AppVideoElement[]>([])
-
-// 添加状态标记
 const hasBackState = ref<boolean>(false)
 const hasForwardState = ref<boolean>(false)
-
-const PAGE_SIZE = 30
-const APP_LOAD_BATCHES = ref<number>(1) // APP模式每次加载的批次数，初始化时为1
-const scrollLoadStartLength = ref<number>(0) // 滚动加载开始时的列表长度
-const consecutiveEmptyLoads = ref<number>(0) // 连续空加载次数，用于防止无限递归（Web模式）
-const appConsecutiveEmptyLoads = ref<number>(0) // APP模式连续空加载次数
-const MAX_EMPTY_LOADS = 5 // 最大连续空加载次数
-// 递归加载锁，防止双重触发
-const isRecursiveLoading = ref<boolean>(false)
 
 // 监听页面可见性变化
 function handleVisibilityChange() {
@@ -230,117 +172,11 @@ onKeyStroke((e: KeyboardEvent) => {
   }
 })
 
-// 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
-// 这样可以避免在模板中进行大量计算，提高渲染性能
-function transformWebVideo(item: VideoItem): VideoCardDisplayData {
-  return {
-    id: item.id,
-    duration: item.duration,
-    title: decodeHtmlEntities(item.title),
-    cover: item.pic,
-    author: {
-      name: decodeHtmlEntities(item.owner?.name || ''),
-      authorFace: item.owner?.face || '',
-      followed: !!item.is_followed,
-      mid: item.owner?.mid || 0,
-    },
-    tag: decodeHtmlEntities(item?.rcmd_reason?.content),
-    view: item.stat?.view || 0,
-    danmaku: item.stat?.danmaku || 0,
-    like: item.stat?.like,
-    publishedTimestamp: item.pubdate,
-    bvid: item.bvid,
-    cid: item.cid,
-    goto: item.goto,
-    trackId: item.track_id,
-    threePointV2: [],
-  }
-}
-
-function transformAppVideo(item: AppVideoItem): VideoCardDisplayData {
-  // 预先计算 followed 状态，避免多次 trim 和比较
-  const bottomReason = item?.bottom_rcmd_reason?.trim()
-  const followed = bottomReason === '已关注' || bottomReason === '已關注'
-
-  // 预先计算 capsuleText，提取复杂逻辑
-  const descPart = item?.desc?.split('·')?.[1]?.trim()
-  const capsuleText = descPart || (followed ? bottomReason : undefined)
-
-  // 预先计算 type，避免在模板中调用函数
-  let type: 'horizontal' | 'vertical' | 'bangumi' = 'horizontal'
-  if (item.card_goto === 'bangumi') {
-    type = 'bangumi'
-  }
-  else if (item.uri && isVerticalVideo(item.uri)) {
-    type = 'vertical'
-  }
-
-  return {
-    // 注意：aid 可能为 0 或 undefined，但只要有 bvid 就是有效视频
-    // VideoCardGrid 的骨架屏判断已优化为同时检查 id 和 bvid
-    id: item.args?.aid ?? 0,
-    durationStr: item.cover_right_text,
-    title: decodeHtmlEntities(item.title),
-    cover: item.cover || '',
-    author: {
-      name: decodeHtmlEntities(item?.mask?.avatar?.text || ''),
-      authorFace: item?.mask?.avatar?.cover || item?.avatar?.cover || '',
-      followed,
-      mid: item?.mask?.avatar?.up_id || 0,
-    },
-    capsuleText: decodeHtmlEntities(capsuleText),
-    bvid: item.bvid || '',
-    viewStr: item.cover_left_text_1,
-    danmakuStr: item.cover_left_text_2,
-    cid: item?.player_args?.cid,
-    goto: item?.goto,
-    trackId: item?.track_id,
-    url: item?.goto === 'bangumi' ? item.uri : '',
-    type,
-    threePointV2: item?.three_point_v2 || [],
-  }
-}
-
-function getWebVideoKey(item: VideoItem): string {
-  const bvid = item.bvid?.trim()
-  if (bvid)
-    return bvid
-  return `${item.id}`
-}
-
-function buildLastShowlist(items: VideoItem[]): string {
-  const parts: string[] = []
-  const seen = new Set<number>()
-
-  items.forEach((item) => {
-    if (!item?.id || item.goto !== 'av' || seen.has(item.id))
-      return
-
-    seen.add(item.id)
-    const followedFlag = item.is_followed ? 'n_' : ''
-    parts.push(`av_${followedFlag}${item.id}`)
-  })
-
-  return parts.join('_')
-}
-
-function getLastShowlistFromList(list: VideoElement[], limit: number): string {
-  const items = list
-    .map(video => video.item)
-    .filter((item): item is VideoItem => !!item && !!item.id)
-
-  return buildLastShowlist(items.slice(-limit))
-}
-
-function getWebFetchRow(list: VideoElement[]): number {
-  return list.reduce((count, video) => (video.item ? count + 1 : count), 0)
-}
-
 watch(() => settings.value.recommendationMode, () => {
   noMoreContent.value = false
   refreshIdx.value = 1
-  consecutiveEmptyLoads.value = 0 // 重置空加载计数器
-  appConsecutiveEmptyLoads.value = 0 // 重置APP模式空加载计数器
+  consecutiveEmptyLoads.value = 0
+  appConsecutiveEmptyLoads.value = 0
 
   videoList.value = []
   appVideoList.value = []
@@ -362,52 +198,21 @@ watch(() => settings.value.recommendationMode, () => {
 
 async function initData() {
   // 直接清空列表，骨架屏由 VideoCardGrid 自动处理
-  videoList.value = []
-  appVideoList.value = []
-
-  APP_LOAD_BATCHES.value = 1 // 初始化时只加载1批
-  consecutiveEmptyLoads.value = 0 // 重置空加载计数器
-  appConsecutiveEmptyLoads.value = 0 // 重置APP模式空加载计数器
-  requestFailed.value = false // 重置请求失败状态
-  await getData()
-}
-
-async function getData() {
   emit('beforeLoading')
-  isLoading.value = true
-  requestFailed.value = false
-
   try {
-    if (settings.value.recommendationMode === 'web') {
-      await getRecommendVideos()
-    }
-    else {
-      try {
-        await getAppRecommendVideos()
-      }
-      catch (error) {
-        console.error('App recommendation failed:', error)
-        requestFailed.value = true
-
-        // 检查是否启用自动切换
-        if (settings.value.autoSwitchRecommendationMode) {
-          // 切换到 web 模式并提示用户
-          settings.value.recommendationMode = 'web'
-          toast.warning('App 推荐数据加载失败，已自动切换至 Web 模式')
-          requestFailed.value = false
-          await getRecommendVideos()
-        }
-        else {
-          toast.error('App 推荐数据加载失败，请手动切换至 Web 模式或稍后重试')
-        }
-      }
-    }
-  }
-  catch {
-    requestFailed.value = true
+    await composableInitData()
   }
   finally {
-    isLoading.value = false
+    emit('afterLoading')
+  }
+}
+
+async function internalGetData() {
+  emit('beforeLoading')
+  try {
+    await getData()
+  }
+  finally {
     emit('afterLoading')
   }
 }
@@ -424,7 +229,7 @@ function handleLoadMore() {
     scrollLoadStartLength.value = appVideoList.value.length
   }
 
-  getData()
+  internalGetData()
 }
 
 function initPageAction() {
@@ -554,291 +359,6 @@ function initPageAction() {
       }
     }
     return false
-  }
-}
-
-async function getRecommendVideos() {
-  try {
-    // 检查是否达到最大空加载次数，防止无限递归
-    if (consecutiveEmptyLoads.value >= MAX_EMPTY_LOADS) {
-      console.warn('达到最大连续空加载次数，停止加载')
-      noMoreContent.value = true
-      return
-    }
-
-    const beforeLoadCount = videoList.value.filter(video => video.item).length
-
-    // 使用当前的 refreshIdx，只在成功时才递增
-    const currentRefreshIdx = refreshIdx.value
-    const fetchRow = getWebFetchRow(videoList.value)
-    const lastShowlist = getLastShowlistFromList(videoList.value, PAGE_SIZE)
-
-    const response: forYouResult = await api.video.getRecommendVideos({
-      fresh_idx: currentRefreshIdx,
-      fresh_idx_1h: currentRefreshIdx,
-      ps: PAGE_SIZE,
-      fetch_row: fetchRow > 0 ? fetchRow : undefined,
-      last_showlist: lastShowlist || undefined,
-    })
-
-    if (!response) {
-      console.error('Failed to load web recommendations: Response is undefined')
-      requestFailed.value = true
-      noMoreContent.value = true
-      return
-    }
-
-    if (!response.data) {
-      requestFailed.value = true
-      noMoreContent.value = true
-      return
-    }
-
-    if (response.code === 0) {
-      // 只在成功时递增 refreshIdx
-      refreshIdx.value++
-
-      const resData = [] as VideoItem[]
-      const existingIds = new Set<string>()
-
-      videoList.value.forEach((video) => {
-        if (video.item)
-          existingIds.add(getWebVideoKey(video.item))
-      })
-
-      response.data.item.forEach((item: VideoItem) => {
-        // 过滤掉广告卡片
-        if (item.goto === 'ad')
-          return
-
-        // 过滤掉缺少必要字段的数据（owner 或 stat 为 null）
-        if (!item.owner || !item.stat)
-          return
-
-        if (filterFunc.value && !filterFunc.value(item))
-          return
-
-        const itemKey = getWebVideoKey(item)
-        if (existingIds.has(itemKey))
-          return
-
-        existingIds.add(itemKey)
-        resData.push(item)
-      })
-
-      // when videoList has length property, it means it is the first time to load
-      if (!beforeLoadCount) {
-        videoList.value = resData.map(item => ({
-          uniqueId: getWebVideoKey(item),
-          item,
-          displayData: transformWebVideo(item),
-        }))
-      }
-      else {
-        resData.forEach((item) => {
-          // If the `filterFunc` is unset, indicating that the user hasn't specified the filter,
-          // skep the `findFirstEmptyItemIndex` check to enhance the performance
-          if (!filterFunc.value) {
-            videoList.value.push({
-              uniqueId: getWebVideoKey(item),
-              item,
-              displayData: transformWebVideo(item),
-            })
-          }
-          else {
-            const findFirstEmptyItemIndex = videoList.value.findIndex(video => !video.item)
-            if (findFirstEmptyItemIndex !== -1) {
-              videoList.value[findFirstEmptyItemIndex] = {
-                uniqueId: getWebVideoKey(item),
-                item,
-                displayData: transformWebVideo(item),
-              }
-            }
-            else {
-              videoList.value.push({
-                uniqueId: getWebVideoKey(item),
-                item,
-                displayData: transformWebVideo(item),
-              })
-            }
-          }
-        })
-      }
-
-      // 检查是否成功添加了新内容
-      const afterLoadCount = videoList.value.filter(video => video.item).length
-      if (afterLoadCount > beforeLoadCount) {
-        // 成功加载了新内容，重置空加载计数器
-        consecutiveEmptyLoads.value = 0
-      }
-      else {
-        // 没有加载到新内容，增加空加载计数器
-        consecutiveEmptyLoads.value++
-      }
-    }
-    else if (response.code === 62011) {
-      needToLoginFirst.value = true
-    }
-    else {
-      // 其他错误码也应该停止加载，避免无限重试
-      console.error('API returned error code:', response.code, response.message)
-      requestFailed.value = true
-      noMoreContent.value = true
-    }
-  }
-  finally {
-    const filledItems = videoList.value.filter(video => video.item)
-    videoList.value = filledItems
-
-    if (!needToLoginFirst.value && !noMoreContent.value) {
-      await nextTick()
-
-      const hasScrollbar = await haveScrollbar()
-      if (!hasScrollbar || filledItems.length < PAGE_SIZE || filledItems.length < 1) {
-        if (isPageVisible.value && consecutiveEmptyLoads.value < MAX_EMPTY_LOADS) {
-          // 设置递归加载锁，防止 VideoCardGrid 触发额外的 loadMore
-          isRecursiveLoading.value = true
-          try {
-            await getRecommendVideos()
-          }
-          finally {
-            isRecursiveLoading.value = false
-          }
-        }
-        else if (consecutiveEmptyLoads.value >= MAX_EMPTY_LOADS) {
-          noMoreContent.value = true
-        }
-      }
-    }
-  }
-}
-
-async function getAppRecommendVideos() {
-  // 检查是否达到最大空加载次数，防止无限递归
-  if (appConsecutiveEmptyLoads.value >= MAX_EMPTY_LOADS) {
-    console.warn('APP模式达到最大连续空加载次数，停止加载')
-    noMoreContent.value = true
-    return
-  }
-
-  // 检查是否有有效的 access token
-  if (!appAuthTokens.value.accessToken) {
-    console.warn('APP 推荐模式需要登录，access token 为空')
-    needToLoginFirst.value = true
-    return
-  }
-
-  const batchesToLoad = APP_LOAD_BATCHES.value
-  const beforeLoadCount = appVideoList.value.length
-
-  // 加载多个批次
-  for (let batch = 0; batch < batchesToLoad; batch++) {
-    try {
-      // 获取最后一个视频的idx用于请求下一批
-      const lastIdx = appVideoList.value.length > 0 && appVideoList.value[appVideoList.value.length - 1].item
-        ? appVideoList.value[appVideoList.value.length - 1].item!.idx
-        : 1
-
-      const response: AppForYouResult = await api.video.getAppRecommendVideos({
-        access_key: appAuthTokens.value.accessToken,
-        s_locale: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
-        c_locate: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
-        appkey: TVAppKey.appkey,
-        idx: lastIdx,
-      })
-
-      if (!response) {
-        console.error('Failed to load batch', batch, 'Response is undefined')
-        requestFailed.value = true
-        break
-      }
-
-      if (response.code === 0) {
-        response.data.items.forEach((item: AppVideoItem) => {
-          // Remove banner & ad cards
-          if (item.card_type.includes('banner') || item.card_type === 'cm_v1')
-            return
-
-          // 应用过滤函数
-          if (appFilterFunc.value && !appFilterFunc.value(item))
-            return
-
-          // 过滤掉没有有效 ID 的视频（既没有 aid 也没有 bvid）
-          const hasValidId = (item.args?.aid && item.args.aid > 0) || (item.bvid && item.bvid.trim() !== '')
-          if (!hasValidId)
-            return
-
-          // 检查是否已经存在该视频，避免重复
-          // 使用 aid/bvid 作为唯一标识符，而不是 idx（idx 只是推荐流中的位置）
-          const videoId = item.args?.aid || item.bvid
-          const isDuplicate = appVideoList.value.some(video =>
-            video.item && (video.item.args?.aid === item.args?.aid || video.item.bvid === item.bvid),
-          )
-          if (isDuplicate)
-            return
-
-          appVideoList.value.push({
-            uniqueId: `${videoId || item.idx}`,
-            item,
-            displayData: transformAppVideo(item),
-          })
-        })
-      }
-      else if (response.code === 62011) {
-        needToLoginFirst.value = true
-        break
-      }
-    }
-    catch (error) {
-      console.error('Failed to load batch', batch, error)
-      requestFailed.value = true
-      break
-    }
-  }
-
-  // 检查是否成功添加了新内容
-  const afterLoadCount = appVideoList.value.length
-  if (afterLoadCount > beforeLoadCount) {
-    // 成功加载了新内容，重置空加载计数器
-    appConsecutiveEmptyLoads.value = 0
-  }
-  else {
-    // 没有加载到新内容，增加空加载计数器
-    appConsecutiveEmptyLoads.value++
-  }
-
-  if (!needToLoginFirst.value) {
-    await nextTick()
-
-    let shouldContinue = false
-    const hasScrollbar = await haveScrollbar()
-
-    if (!hasScrollbar || appVideoList.value.length < PAGE_SIZE) {
-      shouldContinue = true
-    }
-    else if (scrollLoadStartLength.value > 0) {
-      const loadedCount = appVideoList.value.length - scrollLoadStartLength.value
-      if (loadedCount < PAGE_SIZE) {
-        shouldContinue = true
-      }
-      else {
-        scrollLoadStartLength.value = 0
-      }
-    }
-
-    if (shouldContinue && isPageVisible.value && appConsecutiveEmptyLoads.value < MAX_EMPTY_LOADS) {
-      // 设置递归加载锁，防止 VideoCardGrid 触发额外的 loadMore
-      isRecursiveLoading.value = true
-      try {
-        await getAppRecommendVideos()
-      }
-      finally {
-        isRecursiveLoading.value = false
-      }
-    }
-    else if (appConsecutiveEmptyLoads.value >= MAX_EMPTY_LOADS) {
-      noMoreContent.value = true
-    }
   }
 }
 
