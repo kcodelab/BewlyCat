@@ -26,6 +26,10 @@ onMounted(() => {
   initData()
 })
 
+onActivated(() => {
+  initPageAction()
+})
+
 async function initData() {
   isLoading.value = false
   noMoreContent.value = false

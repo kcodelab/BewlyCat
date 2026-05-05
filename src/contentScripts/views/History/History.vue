@@ -31,6 +31,10 @@ onMounted(() => {
   initPageAction()
 })
 
+onActivated(() => {
+  initPageAction()
+})
+
 function initPageAction() {
   handleReachBottom.value = () => {
     if (isLoading.value)

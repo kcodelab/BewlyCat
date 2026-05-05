@@ -62,6 +62,10 @@ onMounted(() => {
   initData()
 })
 
+onActivated(() => {
+  initPageAction()
+})
+
 async function initData() {
   await getFavoriteCategories()
   if (favoriteCategories.length > 0) {
