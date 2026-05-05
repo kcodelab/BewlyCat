@@ -112,3 +112,108 @@ describe('useDark + useThemePack integration', () => {
     expect(settings.value.theme).toBe('light')
   })
 })
+
+describe('appBackground wallpaper suppression (render gate)', () => {
+  beforeEach(() => {
+    settings.value.themePack = 'default'
+    settings.value.wallpaper = ''
+    settings.value.searchPageWallpaper = ''
+  })
+
+  // Skipped: AppBackground.vue requires @vue/test-utils (not installed) and a chain of
+  // browser-API-heavy dependencies (useStorageLocal → webextension-polyfill, IndexedDB-based
+  // wallpaperCache, shadow-DOM querySelector calls). A DOM-level mount cannot be set up
+  // cleanly in the current jsdom-only test environment without significant additional mocking.
+  //
+  // The composable-level invariant — shouldSuppressWallpaper being true whenever
+  // themePack='netflix' — is already covered by the 'suppresses wallpaper without clearing
+  // stored values' test above, and AppBackground.vue's own guards read directly from that
+  // computed (resolveGlobalWallpaper / resolveSearchWallpaper both short-circuit when
+  // shouldSuppressWallpaper.value is true).
+  it.skip('appBackground: netflix pack suppresses wallpaper DOM node (needs @vue/test-utils)', () => {
+    // When @vue/test-utils is added:
+    // 1. mount(AppBackground, { props: { activatedPage: AppPage.Search } }) with
+    //    themePack='default' + wallpaper set → assert backgroundImage !== ''
+    // 2. switch themePack='netflix' → assert backgroundImage === '' (resolvedWallpaper cleared)
+  })
+
+  it('shouldSuppressWallpaper drives AppBackground wallpaper to empty (composable-level)', () => {
+    // Verify the composable gate that AppBackground.vue relies on.
+    settings.value.wallpaper = 'https://example.com/bg.jpg'
+    settings.value.searchPageWallpaper = 'https://example.com/sbg.jpg'
+
+    const { shouldSuppressWallpaper } = useThemePack()
+
+    // default pack: no suppression
+    expect(shouldSuppressWallpaper.value).toBe(false)
+
+    // netflix pack: suppress
+    settings.value.themePack = 'netflix'
+    expect(shouldSuppressWallpaper.value).toBe(true)
+
+    // stored values still intact (AppBackground reads these only when NOT suppressed)
+    expect(settings.value.wallpaper).toBe('https://example.com/bg.jpg')
+    expect(settings.value.searchPageWallpaper).toBe('https://example.com/sbg.jpg')
+  })
+})
+
+describe('home search-page-mode wallpaper suppression', () => {
+  beforeEach(() => {
+    settings.value.themePack = 'default'
+    settings.value.useSearchPageModeOnHomePage = false
+    settings.value.individuallySetSearchPageWallpaper = false
+    settings.value.searchPageWallpaper = ''
+  })
+
+  // The Home.vue template renders the search-page-mode wallpaper background with:
+  //   v-if="!shouldSuppressWallpaper && settings.useSearchPageModeOnHomePage
+  //         && settings.individuallySetSearchPageWallpaper && showSearchPageMode"
+  //
+  // Direct component mounting is avoided (Home.vue pulls in every sub-page via
+  // defineAsyncComponent, requires router, pinia stores, emitter, and CSS variables)
+  // and @vue/test-utils is not installed. Instead we validate the boolean expression
+  // that drives the v-if as a pure unit test.
+  it('v-if gate: netflix pack suppresses search-page wallpaper regardless of other flags', () => {
+    settings.value.useSearchPageModeOnHomePage = true
+    settings.value.individuallySetSearchPageWallpaper = true
+    settings.value.searchPageWallpaper = 'https://example.com/bg.jpg'
+    const showSearchPageMode = true // simulates the ref being true
+
+    const { shouldSuppressWallpaper } = useThemePack()
+
+    // default pack: all flags true → wallpaper section would render
+    const renderWithDefault
+      = !shouldSuppressWallpaper.value
+        && settings.value.useSearchPageModeOnHomePage
+        && settings.value.individuallySetSearchPageWallpaper
+        && showSearchPageMode
+    expect(renderWithDefault).toBe(true)
+
+    // netflix pack: shouldSuppressWallpaper flips → wallpaper section must NOT render
+    settings.value.themePack = 'netflix'
+    const renderWithNetflix
+      = !shouldSuppressWallpaper.value
+        && settings.value.useSearchPageModeOnHomePage
+        && settings.value.individuallySetSearchPageWallpaper
+        && showSearchPageMode
+    expect(renderWithNetflix).toBe(false)
+
+    // stored user setting untouched
+    expect(settings.value.searchPageWallpaper).toBe('https://example.com/bg.jpg')
+  })
+
+  it('v-if gate: default pack preserves wallpaper rendering when all conditions met', () => {
+    settings.value.useSearchPageModeOnHomePage = true
+    settings.value.individuallySetSearchPageWallpaper = true
+    const showSearchPageMode = true
+
+    const { shouldSuppressWallpaper } = useThemePack()
+
+    const renders
+      = !shouldSuppressWallpaper.value
+        && settings.value.useSearchPageModeOnHomePage
+        && settings.value.individuallySetSearchPageWallpaper
+        && showSearchPageMode
+    expect(renders).toBe(true)
+  })
+})

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
+import { useThemePack } from '~/composables/useThemePack'
 import { IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 
@@ -9,6 +10,7 @@ const props = defineProps<{
 }>()
 const { reachTop } = useBewlyApp()
 const { isDark } = useDark()
+const { effectiveDarkModeBaseColor } = useThemePack()
 const headerShow = ref(false)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
@@ -114,8 +116,8 @@ watch(() => settings.value.useOriginalBilibiliTopBar, (newValue) => {
   }
 }, { immediate: true })
 
-// 监听深色模式基准颜色变化
-watch(() => settings.value.darkModeBaseColor, (newColor) => {
+// 监听深色模式基准颜色变化（使用 effective 值，Netflix 主题包时使用覆盖值）
+watch(() => effectiveDarkModeBaseColor.value, (newColor) => {
   if (iframeRef.value?.contentWindow && isDark.value) {
     try {
       iframeRef.value.contentWindow.postMessage({
@@ -152,7 +154,7 @@ function handleIframeLoad() {
         iframeRef.value?.contentWindow?.postMessage({
           type: IFRAME_DARK_MODE_CHANGE,
           isDark: isDark.value,
-          darkModeBaseColor: settings.value.darkModeBaseColor,
+          darkModeBaseColor: effectiveDarkModeBaseColor.value,
         }, '*')
         iframeRef.value?.contentWindow?.postMessage({
           type: IFRAME_TOP_BAR_CHANGE,

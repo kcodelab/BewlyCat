@@ -14,7 +14,7 @@ import { HomeSubPage } from './types'
 
 const mainStore = useMainStore()
 const { handleBackToTop, homeActivatedPage } = useBewlyApp()
-const { shouldSuppressWallpaper } = useThemePack()
+const { shouldSuppressWallpaper, effectiveSearchPageLogoColor } = useThemePack()
 const handleThrottledBackToTop = useThrottleFn((targetScrollTop: number = 0) => handleBackToTop(targetScrollTop), 1000)
 
 // ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
@@ -302,7 +302,7 @@ function toggleTabContentLoading(loading: boolean) {
           h-500px
         >
           <Logo
-            v-if="settings.searchPageShowLogo" :size="180" :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
+            v-if="settings.searchPageShowLogo" :size="180" :color="effectiveSearchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
             :glow="settings.searchPageLogoGlow"
             m="t--70px b-12" z-1
           />

@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { onUnmounted, ref } from 'vue'
 
+import { useThemePack } from '~/composables/useThemePack'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 
@@ -9,6 +10,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 const searchInput = ref<string>('')
 const topBarStore = useTopBarStore()
 const { searchKeyword: topBarSearchKeyword, isLogin } = storeToRefs(topBarStore)
+const { shouldSuppressWallpaper, effectiveSearchPageLogoColor } = useThemePack()
 
 // 页面卸载时清空顶栏搜索框（真正离开搜索页面）
 onUnmounted(() => {
@@ -65,14 +67,14 @@ function handleSearch(keyword: string) {
     m="t-20vh"
   >
     <Logo
-      v-if="settings.searchPageShowLogo" :size="180" :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
+      v-if="settings.searchPageShowLogo" :size="180" :color="effectiveSearchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
       :glow="settings.searchPageLogoGlow"
       mb-12 z-1
     />
     <SearchBar
       v-model="searchInput"
-      :darken-on-focus="settings.searchPageDarkenOnSearchFocus"
-      :blurred-on-focus="settings.searchPageBlurredOnSearchFocus"
+      :darken-on-focus="!shouldSuppressWallpaper && settings.searchPageDarkenOnSearchFocus"
+      :blurred-on-focus="!shouldSuppressWallpaper && settings.searchPageBlurredOnSearchFocus"
       :focused-character="settings.searchPageSearchBarFocusCharacter"
       :show-hot-search="settings.showHotSearchInTopBar"
       :search-behavior="settings.usePluginSearchResultsPage ? 'stay' : 'navigate'"

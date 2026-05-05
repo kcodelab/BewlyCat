@@ -3,6 +3,7 @@ import { useEventListener } from '@vueuse/core'
 
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
+import { useThemePack } from '~/composables/useThemePack'
 import { DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { isHomePage, isInIframe } from '~/utils/main'
@@ -20,6 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const { isDark } = useDark()
+const { effectiveDarkModeBaseColor } = useThemePack()
 const { activeDrawer, setActiveDrawer } = useBewlyApp()
 
 const show = ref(false)
@@ -83,8 +85,8 @@ watch(() => isDark.value, (newValue) => {
   }
 })
 
-// 监听深色模式基准颜色变化
-watch(() => settings.value.darkModeBaseColor, (newColor) => {
+// 监听深色模式基准颜色变化（使用 effective 值，Netflix 主题包时使用覆盖值）
+watch(() => effectiveDarkModeBaseColor.value, (newColor) => {
   if (iframeRef.value?.contentWindow && isDark.value) {
     try {
       iframeRef.value.contentWindow.postMessage({
@@ -107,7 +109,7 @@ watch(() => showIframe.value, (newValue) => {
         iframeRef.value?.contentWindow?.postMessage({
           type: IFRAME_DARK_MODE_CHANGE,
           isDark: isDark.value,
-          darkModeBaseColor: settings.value.darkModeBaseColor,
+          darkModeBaseColor: effectiveDarkModeBaseColor.value,
         }, '*')
       }
       catch (error) {

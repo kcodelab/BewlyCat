@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
+import { useThemePack } from '~/composables/useThemePack'
 import { IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
@@ -17,6 +18,7 @@ const emit = defineEmits<{
 
 const { mainAppRef, activeDrawer, setActiveDrawer } = useBewlyApp()
 const { isDark } = useDark()
+const { effectiveDarkModeBaseColor } = useThemePack()
 
 const show = ref(false)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
@@ -57,7 +59,7 @@ function syncIframeDarkModeState() {
       iframeRef.value.contentWindow.postMessage({
         type: IFRAME_DARK_MODE_CHANGE,
         isDark: isDark.value,
-        darkModeBaseColor: settings.value.darkModeBaseColor,
+        darkModeBaseColor: effectiveDarkModeBaseColor.value,
       }, '*')
     }
     catch (error) {
@@ -80,8 +82,8 @@ watch(() => isDark.value, () => {
   syncIframeDarkModeState()
 })
 
-// 监听深色模式基准颜色变化
-watch(() => settings.value.darkModeBaseColor, () => {
+// 监听深色模式基准颜色变化（使用 effective 值，Netflix 主题包时使用覆盖值）
+watch(() => effectiveDarkModeBaseColor.value, () => {
   syncIframeDarkModeState()
 })
 
