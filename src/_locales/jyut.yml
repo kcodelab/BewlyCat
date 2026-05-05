@@ -713,6 +713,8 @@ home:
   live: 直播
   moments: 動向
   uploaders_with_updates: '{count}個UP主有更新'
+  continue_watching: 繼續睇
+  top10_today: 今日 TOP 10
 ranking:
   all: 全部
   original_content: 原創內容
