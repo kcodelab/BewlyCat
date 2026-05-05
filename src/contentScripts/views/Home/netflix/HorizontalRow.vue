@@ -48,6 +48,7 @@ function scrollRight() {
 <template>
   <section class="netflix-row">
     <h2 class="netflix-row__title">
+      <span class="netflix-row__title-bar" aria-hidden="true" />
       {{ title }}
     </h2>
 
@@ -125,6 +126,19 @@ function scrollRight() {
   color: #e5e5e5;
   margin-bottom: 0.5rem;
   padding: 0 2rem;
+  display: flex;
+  align-items: center;
+}
+
+.netflix-row__title-bar {
+  display: inline-block;
+  width: 4px;
+  height: 1em;
+  background: var(--bew-theme-color, #e50914);
+  border-radius: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .netflix-row__wrapper {

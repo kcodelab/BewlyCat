@@ -68,6 +68,7 @@ function scrollRight() {
 <template>
   <section class="continue-row">
     <h2 class="continue-row__title">
+      <span class="continue-row__title-bar" aria-hidden="true" />
       {{ t('home.continue_watching') }}
     </h2>
 
@@ -152,6 +153,19 @@ function scrollRight() {
   color: #e5e5e5;
   margin-bottom: 0.5rem;
   padding: 0 2rem;
+  display: flex;
+  align-items: center;
+}
+
+.continue-row__title-bar {
+  display: inline-block;
+  width: 4px;
+  height: 1em;
+  background: var(--bew-theme-color, #e50914);
+  border-radius: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .continue-row__error {
