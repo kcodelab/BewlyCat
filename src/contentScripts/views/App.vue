@@ -889,7 +889,9 @@ if (settings.value.cleanUrlArgument) {
                 w="lg:[calc(100%-200px)] [calc(100%-150px)]"
               >
                 <Transition name="page-fade">
-                  <Component :is="pages[activatedPage]" :key="activatedPage" />
+                  <KeepAlive :max="3">
+                    <Component :is="pages[activatedPage]" :key="activatedPage" />
+                  </KeepAlive>
                 </Transition>
 
                 <!-- ✅ IntersectionObserver 哨兵：用于检测滚动到底部，避免在 RAF 中读取 scrollHeight -->
