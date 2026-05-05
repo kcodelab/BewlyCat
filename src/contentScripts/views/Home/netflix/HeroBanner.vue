@@ -112,33 +112,37 @@ function openVideo(video: HeroVideo | null) {
       </Transition>
     </template>
 
-    <!-- Content (always uses currentVideo for smooth text transition) -->
-    <Transition name="hero-content-fade" mode="out-in">
-      <div
-        v-if="currentVideo"
-        :key="currentVideo.bvid ?? currentVideo.aid ?? current"
-        class="hero-banner__content"
-        @mouseenter="onMouseEnter"
-        @mouseleave="onMouseLeave"
-      >
-        <h1 class="hero-banner__title">
-          {{ currentVideo.title }}
-        </h1>
-        <p v-if="currentVideo.desc" class="hero-banner__desc">
-          {{ currentVideo.desc }}
-        </p>
-        <div class="hero-banner__actions">
-          <button class="hero-banner__btn hero-banner__btn--play" @click="openVideo(currentVideo)">
-            <div i-mingcute:play-fill class="hero-banner__btn-icon" />
-            <span>播放</span>
-          </button>
-          <button class="hero-banner__btn hero-banner__btn--info" @click="openVideo(currentVideo)">
-            <div i-mingcute:information-line class="hero-banner__btn-icon" />
-            <span>更多信息</span>
-          </button>
+    <!-- Align wrapper: 复制 App.vue 主容器几何（max-width + 内边距），
+         让 Hero 内容与下方 row 同侧对齐 -->
+    <div class="hero-banner__align">
+      <!-- Content (always uses currentVideo for smooth text transition) -->
+      <Transition name="hero-content-fade" mode="out-in">
+        <div
+          v-if="currentVideo"
+          :key="currentVideo.bvid ?? currentVideo.aid ?? current"
+          class="hero-banner__content"
+          @mouseenter="onMouseEnter"
+          @mouseleave="onMouseLeave"
+        >
+          <h1 class="hero-banner__title">
+            {{ currentVideo.title }}
+          </h1>
+          <p v-if="currentVideo.desc" class="hero-banner__desc">
+            {{ currentVideo.desc }}
+          </p>
+          <div class="hero-banner__actions">
+            <button class="hero-banner__btn hero-banner__btn--play" @click="openVideo(currentVideo)">
+              <div i-mingcute:play-fill class="hero-banner__btn-icon" />
+              <span>播放</span>
+            </button>
+            <button class="hero-banner__btn hero-banner__btn--info" @click="openVideo(currentVideo)">
+              <div i-mingcute:information-line class="hero-banner__btn-icon" />
+              <span>更多信息</span>
+            </button>
+          </div>
         </div>
-      </div>
-    </Transition>
+      </Transition>
+    </div>
 
     <!-- Carousel controls (only shown for 2-3 items) -->
     <template v-if="isCarousel">
@@ -224,13 +228,33 @@ function openVideo(video: HeroVideo | null) {
   z-index: 1;
 }
 
+/* ── Align wrapper ──────────────────────────────────
+   复制 App.vue 的几何：<main max-w=$bew-page-max-width m-auto>
+   + 内层 <div w="lg:[calc(100%-200px)] [calc(100%-150px)]" m-auto>
+   再叠 .netflix-home 的 padding: 0 2rem。
+   用 flex 让 Hero 内容沿底部对齐，水平由 padding 决定（与 row 内容同左缘） */
+.hero-banner__align {
+  position: absolute;
+  inset: 0;
+  max-width: var(--bew-page-max-width);
+  margin: 0 auto;
+  padding: 0 calc(75px + 2rem) 2.5rem; /* (100%-150px)/2 = 75px + .netflix-home 2rem; 底部 2.5rem 离 Hero 底 */
+  pointer-events: none;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+}
+
+@media (min-width: 1024px) {
+  .hero-banner__align {
+    padding: 0 calc(100px + 2rem) 2.5rem; /* lg 时 (100%-200px)/2 = 100px + 2rem */
+  }
+}
+
 /* ── Content ─────────────────────────────────────── */
 .hero-banner__content {
-  position: absolute;
-  bottom: 15%;
-  left: 4%;
-  max-width: 40%;
-  z-index: 2;
+  pointer-events: auto;
+  max-width: min(46%, 640px);
 }
 
 .hero-banner__title {
