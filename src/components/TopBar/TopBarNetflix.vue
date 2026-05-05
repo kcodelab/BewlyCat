@@ -6,6 +6,7 @@ import { useThemePack } from '~/composables/useThemePack'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { isHomePage } from '~/utils/main'
 
 import MyListMenu from './components/MyListMenu.vue'
 import NotificationsDrawer from './components/NotificationsDrawer.vue'
@@ -42,15 +43,26 @@ const internalNavItems = [
   { labelKey: 'topbar.nav_anime', page: AppPage.Anime },
 ] as const
 
-// External nav items (open bilibili in new tab)
+// External nav items (navigate same-tab to bilibili partition pages)
 const externalNavItems = [
-  { labelKey: 'topbar.nav_movie', url: 'https://www.bilibili.com/v/cinephile/movie/' },
-  { labelKey: 'topbar.nav_game', url: 'https://www.bilibili.com/v/game/' },
-  { labelKey: 'topbar.nav_tech', url: 'https://www.bilibili.com/v/tech/' },
+  { labelKey: 'topbar.nav_movie', url: 'https://www.bilibili.com/v/cinephile/movie/', urlPattern: /\/v\/cinephile\// },
+  { labelKey: 'topbar.nav_game', url: 'https://www.bilibili.com/v/game/', urlPattern: /\/v\/game(?!shore)/ },
+  { labelKey: 'topbar.nav_tech', url: 'https://www.bilibili.com/v/tech/', urlPattern: /\/v\/tech\// },
 ] as const
 
+// Internal nav is only active when on the home page (bilibili.com/)
+// — avoids false-positive active state on partition pages.
 function isNavActive(page: AppPage): boolean {
+  if (!isHomePage())
+    return false
   return activatedPage.value === page
+}
+
+// External nav is active when the current URL matches the partition's URL pattern.
+// URL patterns are evaluated at mount time; page navigations via openExternal()
+// trigger a full page reload, so the component re-mounts and re-evaluates correctly.
+function isExternalNavActive(item: typeof externalNavItems[number]): boolean {
+  return item.urlPattern.test(window.location.href)
 }
 
 function navigateTo(page: AppPage) {
@@ -117,6 +129,8 @@ function handleOpenSettings() {
           v-for="item in externalNavItems"
           :key="item.url"
           class="netflix-nav-item"
+          :class="{ active: isExternalNavActive(item) }"
+          :style="isExternalNavActive(item) ? { '--nav-underline-color': effectiveThemeColor } : {}"
           px-3 py-2
           text="$bew-text-1 sm"
           fw-semibold
