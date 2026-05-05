@@ -64,7 +64,7 @@ const menuItems = [
     page: null,
     action: () => {
       isOpen.value = false
-      window.open('https://www.bilibili.com/anime/timeline/', '_blank')
+      window.location.href = 'https://www.bilibili.com/anime/timeline/'
     },
   },
   {

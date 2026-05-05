@@ -19,6 +19,10 @@ import UploadPop from './pops/UploadPop.vue'
 import UserPanelPop from './pops/UserPanelPop.vue'
 import WatchLaterPop from './pops/WatchLaterPop.vue'
 
+const props = defineProps<{
+  simplified?: boolean
+}>()
+
 const emit = defineEmits(['notificationsClick'])
 
 const topBarStore = useTopBarStore()
@@ -177,6 +181,10 @@ function handleNotificationsClick(item: { name: string, url: string, unreadCount
 
 // 判断分割线是否应该显示
 const shouldShowDivider = computed(() => {
+  // In simplified mode (Netflix), the left-side icons are hidden, so no divider needed
+  if (props.simplified)
+    return false
+
   // 分割线左边的组件：moments、favorites、history、watchLater、creatorCenter
   const leftSideVisible = isComponentVisible('moments')
     || isComponentVisible('favorites')
@@ -216,151 +224,153 @@ const shouldShowDivider = computed(() => {
       </div>
       <template v-if="isLogin">
         <div class="hidden lg:flex" gap-1>
-          <!-- Moments -->
-          <div
-            v-if="isComponentVisible('moments')"
-            ref="moments"
-            class="right-side-item"
-            :class="{ active: popupVisible?.moments }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
-          >
-            <template v-if="newMomentsCount > 0 && shouldShowBadge('moments')">
-              <div
-                v-if="shouldShowNumberBadge('moments')"
-                class="unread-num-dot"
+          <template v-if="!props.simplified">
+            <!-- Moments -->
+            <div
+              v-if="isComponentVisible('moments')"
+              ref="moments"
+              class="right-side-item"
+              :class="{ active: popupVisible?.moments }"
+              @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
+            >
+              <template v-if="newMomentsCount > 0 && shouldShowBadge('moments')">
+                <div
+                  v-if="shouldShowNumberBadge('moments')"
+                  class="unread-num-dot"
+                >
+                  {{ newMomentsCount > 99 ? '99+' : newMomentsCount }}
+                </div>
+                <div
+                  v-else-if="shouldShowDotBadge('moments')"
+                  class="unread-dot"
+                />
+              </template>
+              <ALink
+                :class="{ 'white-icon': forceWhiteIcon }"
+                href="https://t.bilibili.com"
+                :title="$t('topbar.moments')"
+                type="topBar"
               >
-                {{ newMomentsCount > 99 ? '99+' : newMomentsCount }}
-              </div>
-              <div
-                v-else-if="shouldShowDotBadge('moments')"
-                class="unread-dot"
-              />
-            </template>
-            <ALink
-              :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://t.bilibili.com"
-              :title="$t('topbar.moments')"
-              type="topBar"
-            >
-              <div i-tabler:windmill />
-            </ALink>
+                <div i-tabler:windmill />
+              </ALink>
 
-            <Transition name="slide-in">
-              <MomentsPop
-                v-show="popupVisible?.moments"
-                ref="momentsPopRef"
-                class="bew-popover"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
-
-          <!-- Favorites -->
-          <div
-            v-if="isComponentVisible('favorites')"
-            ref="favorites"
-            class="right-side-item"
-            :class="{ active: popupVisible?.favorites }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
-          >
-            <ALink
-              :class="{ 'white-icon': forceWhiteIcon }"
-              :href="`https://space.bilibili.com/${mid}/favlist`"
-              :title="$t('topbar.favorites')"
-              type="topBar"
-            >
-              <div i-mingcute:star-line />
-            </ALink>
-
-            <Transition name="slide-in">
-              <KeepAlive>
-                <FavoritesPop
-                  v-if="popupVisible?.favorites"
-                  ref="favoritesPopRef"
+              <Transition name="slide-in">
+                <MomentsPop
+                  v-show="popupVisible?.moments"
+                  ref="momentsPopRef"
                   class="bew-popover"
                   @click.stop="() => {}"
                 />
-              </KeepAlive>
-            </Transition>
-          </div>
+              </Transition>
+            </div>
 
-          <!-- History -->
-          <div
-            v-if="isComponentVisible('history')"
-            ref="history"
-            class="right-side-item"
-            :class="{ active: popupVisible?.history }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
-          >
-            <ALink
-              :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://www.bilibili.com/history"
-              :title="$t('topbar.history')"
-              type="topBar"
+            <!-- Favorites -->
+            <div
+              v-if="isComponentVisible('favorites')"
+              ref="favorites"
+              class="right-side-item"
+              :class="{ active: popupVisible?.favorites }"
+              @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
             >
-              <div i-mingcute:time-line />
-            </ALink>
-
-            <Transition name="slide-in">
-              <HistoryPop
-                v-if="popupVisible?.history"
-                ref="historyPopRef"
-                class="bew-popover"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
-
-          <!-- Watch later -->
-          <div
-            v-if="isComponentVisible('watchLater')"
-            ref="watchLater"
-            class="right-side-item"
-            :class="{ active: popupVisible?.watchLater }"
-            @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
-          >
-            <template v-if="watchLaterCount > 0 && shouldShowBadge('watchLater')">
-              <div
-                v-if="shouldShowNumberBadge('watchLater')"
-                class="unread-num-dot"
+              <ALink
+                :class="{ 'white-icon': forceWhiteIcon }"
+                :href="`https://space.bilibili.com/${mid}/favlist`"
+                :title="$t('topbar.favorites')"
+                type="topBar"
               >
-                {{ watchLaterCount > 99 ? '99+' : watchLaterCount }}
-              </div>
-              <div
-                v-else-if="shouldShowDotBadge('watchLater')"
-                class="unread-dot"
-              />
-            </template>
-            <ALink
-              :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://www.bilibili.com/watchlater/list"
-              :title="$t('topbar.watch_later')"
-              type="topBar"
-            >
-              <div i-mingcute:carplay-line />
-            </ALink>
+                <div i-mingcute:star-line />
+              </ALink>
 
-            <Transition name="slide-in">
-              <WatchLaterPop
-                v-if="popupVisible?.watchLater"
-                ref="watchLaterPopRef"
-                class="bew-popover"
-                @click.stop="() => {}"
-              />
-            </Transition>
-          </div>
+              <Transition name="slide-in">
+                <KeepAlive>
+                  <FavoritesPop
+                    v-if="popupVisible?.favorites"
+                    ref="favoritesPopRef"
+                    class="bew-popover"
+                    @click.stop="() => {}"
+                  />
+                </KeepAlive>
+              </Transition>
+            </div>
 
-          <!-- Creative center -->
-          <div v-if="isComponentVisible('creatorCenter')" class="right-side-item">
-            <a
-              :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://member.bilibili.com/platform/home"
-              target="_blank"
-              :title="$t('topbar.creative_center')"
+            <!-- History -->
+            <div
+              v-if="isComponentVisible('history')"
+              ref="history"
+              class="right-side-item"
+              :class="{ active: popupVisible?.history }"
+              @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
             >
-              <div i-mingcute:bulb-line />
-            </a>
-          </div>
+              <ALink
+                :class="{ 'white-icon': forceWhiteIcon }"
+                href="https://www.bilibili.com/history"
+                :title="$t('topbar.history')"
+                type="topBar"
+              >
+                <div i-mingcute:time-line />
+              </ALink>
+
+              <Transition name="slide-in">
+                <HistoryPop
+                  v-if="popupVisible?.history"
+                  ref="historyPopRef"
+                  class="bew-popover"
+                  @click.stop="() => {}"
+                />
+              </Transition>
+            </div>
+
+            <!-- Watch later -->
+            <div
+              v-if="isComponentVisible('watchLater')"
+              ref="watchLater"
+              class="right-side-item"
+              :class="{ active: popupVisible?.watchLater }"
+              @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
+            >
+              <template v-if="watchLaterCount > 0 && shouldShowBadge('watchLater')">
+                <div
+                  v-if="shouldShowNumberBadge('watchLater')"
+                  class="unread-num-dot"
+                >
+                  {{ watchLaterCount > 99 ? '99+' : watchLaterCount }}
+                </div>
+                <div
+                  v-else-if="shouldShowDotBadge('watchLater')"
+                  class="unread-dot"
+                />
+              </template>
+              <ALink
+                :class="{ 'white-icon': forceWhiteIcon }"
+                href="https://www.bilibili.com/watchlater/list"
+                :title="$t('topbar.watch_later')"
+                type="topBar"
+              >
+                <div i-mingcute:carplay-line />
+              </ALink>
+
+              <Transition name="slide-in">
+                <WatchLaterPop
+                  v-if="popupVisible?.watchLater"
+                  ref="watchLaterPopRef"
+                  class="bew-popover"
+                  @click.stop="() => {}"
+                />
+              </Transition>
+            </div>
+
+            <!-- Creative center -->
+            <div v-if="isComponentVisible('creatorCenter')" class="right-side-item">
+              <a
+                :class="{ 'white-icon': forceWhiteIcon }"
+                href="https://member.bilibili.com/platform/home"
+                target="_blank"
+                :title="$t('topbar.creative_center')"
+              >
+                <div i-mingcute:bulb-line />
+              </a>
+            </div>
+          </template>
         </div>
 
         <!-- More -->

@@ -43,7 +43,7 @@ function navigateTo(page: AppPage) {
 }
 
 function openExternal(url: string) {
-  window.open(url, '_blank')
+  window.location.href = url
 }
 
 function handleMyListNavigate(page: AppPage) {
@@ -141,6 +141,7 @@ function handleOpenSettings() {
       <div class="netflix-topbar__right" flex="~ items-center gap-2" shrink-0>
         <TopBarSearch />
         <TopBarRight
+          :simplified="true"
           @notifications-click="handleNotificationsItemClick"
         />
       </div>
@@ -163,7 +164,7 @@ function handleOpenSettings() {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 999;
+  z-index: 10000;
   width: 100%;
   background-color: var(--bew-bg);
   border-bottom: 1px solid var(--bew-border-color, rgba(255, 255, 255, 0.06));
