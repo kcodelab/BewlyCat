@@ -1,5 +1,6 @@
 import { useI18n } from 'vue-i18n'
 
+import { useThemePack } from '~/composables/useThemePack'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled } from '~/contentScripts/features/blockUselessFeedCards'
 import { LanguageType } from '~/enums/appEnums'
@@ -9,6 +10,7 @@ import { cleanBilibiliShareText, getUserID, injectCSS, isHomePage, isInIframe } 
 
 export function setupNecessarySettingsWatchers() {
   const { locale } = useI18n()
+  const { effectiveThemeColor } = useThemePack()
   let syncingTopBarSettings = false
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
@@ -255,15 +257,16 @@ export function setupNecessarySettingsWatchers() {
       document.documentElement.removeChild(blockTopSearchPageAdsStyleEl)
   }, { immediate: true })
 
+  // 监听有效主题色（Netflix 包时锁定为 #E50914，否则使用用户设置）
   watch(
-    () => settings.value.themeColor,
+    effectiveThemeColor,
     () => {
       const bewlyElement = document.querySelector('#bewly') as HTMLElement
       if (bewlyElement) {
-        bewlyElement.style.setProperty('--bew-theme-color', settings.value.themeColor)
+        bewlyElement.style.setProperty('--bew-theme-color', effectiveThemeColor.value)
       }
 
-      document.documentElement.style.setProperty('--bew-theme-color', settings.value.themeColor)
+      document.documentElement.style.setProperty('--bew-theme-color', effectiveThemeColor.value)
     },
     { immediate: true },
   )

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useDark } from '~/composables/useDark'
+import { useThemePack } from '~/composables/useThemePack'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { isLocalWallpaperUrl, resolveWallpaperUrl } from '~/utils/localWallpaper'
@@ -9,6 +10,7 @@ import { cleanupExpiredCache, getOrCacheWallpaper } from '~/utils/wallpaperCache
 const props = defineProps<{ activatedPage: AppPage }>()
 
 const { isDark } = useDark()
+const { shouldSuppressWallpaper, effectiveThemeColor, effectiveUseLinearGradient } = useThemePack()
 
 // 组件挂载时清理过期缓存
 onMounted(() => {
@@ -22,6 +24,12 @@ const resolvedSearchPageWallpaper = ref('')
 
 // 解析全局壁纸
 async function resolveGlobalWallpaper() {
+  // Netflix 主题包抑制壁纸渲染，返回空字符串（不清空用户设置值）
+  if (shouldSuppressWallpaper.value) {
+    resolvedWallpaper.value = ''
+    return
+  }
+
   const originalUrl = settings.value.wallpaper
 
   // 如果是本地壁纸,直接解析,不使用URL缓存
@@ -41,6 +49,12 @@ async function resolveGlobalWallpaper() {
 
 // 解析搜索页壁纸
 async function resolveSearchWallpaper() {
+  // Netflix 主题包抑制壁纸渲染，返回空字符串（不清空用户设置值）
+  if (shouldSuppressWallpaper.value) {
+    resolvedSearchPageWallpaper.value = ''
+    return
+  }
+
   const originalUrl = settings.value.searchPageWallpaper
 
   // 如果是本地壁纸,直接解析,不使用URL缓存
@@ -58,21 +72,31 @@ async function resolveSearchWallpaper() {
   }
 }
 
-// 监听设置变化,重新解析壁纸
-watch(() => [settings.value.wallpaper, settings.value.wallpaperCacheTime], ([, newCacheTime], oldValue) => {
+// 监听设置变化,重新解析壁纸（同时监听 shouldSuppressWallpaper，Netflix 切换时重置）
+watch(() => [settings.value.wallpaper, settings.value.wallpaperCacheTime, shouldSuppressWallpaper.value], ([, newCacheTime, suppress], oldValue) => {
   // 如果缓存时间改变,用新的缓存时间清理可能已过期的缓存
   if (oldValue && newCacheTime !== oldValue[1]) {
     cleanupExpiredCache(newCacheTime as number)
   }
-  resolveGlobalWallpaper()
+  if (suppress) {
+    resolvedWallpaper.value = ''
+  }
+  else {
+    resolveGlobalWallpaper()
+  }
 }, { immediate: true })
 
-watch(() => [settings.value.searchPageWallpaper, settings.value.searchPageWallpaperCacheTime], ([, newCacheTime], oldValue) => {
+watch(() => [settings.value.searchPageWallpaper, settings.value.searchPageWallpaperCacheTime, shouldSuppressWallpaper.value], ([, newCacheTime, suppress], oldValue) => {
   // 如果缓存时间改变,用新的缓存时间清理可能已过期的缓存
   if (oldValue && newCacheTime !== oldValue[1]) {
     cleanupExpiredCache(newCacheTime as number)
   }
-  resolveSearchWallpaper()
+  if (suppress) {
+    resolvedSearchPageWallpaper.value = ''
+  }
+  else {
+    resolveSearchWallpaper()
+  }
 }, { immediate: true })
 
 // 计算当前页面使用的壁纸URL
@@ -84,7 +108,7 @@ const currentWallpaperUrl = computed(() => {
 })
 
 const themeColorHsl = computed(() => {
-  return hexToHSL(settings.value.themeColor).replace('hsl(', '').replace(')', '')
+  return hexToHSL(effectiveThemeColor.value).replace('hsl(', '').replace(')', '')
 })
 const themeColorHue = computed((): number => {
   return Number(themeColorHsl.value.split(',')[0]) || 0
@@ -134,7 +158,7 @@ function setAppWallpaperMaskingOpacity() {
     <!-- linear gradient background -->
     <Transition name="fade">
       <div
-        v-if="settings.useLinearGradientThemeColorBackground && isDark"
+        v-if="effectiveUseLinearGradient && isDark"
         :style="{
           opacity: activatedPage === AppPage.Search ? 1 : 0.4,
           background: themeColorLinearGradientBackground,

@@ -1,5 +1,6 @@
 import { usePreferredDark } from '@vueuse/core'
 
+import { useThemePack } from '~/composables/useThemePack'
 import { DARK_MODE_BASE_COLOR_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { runWhenIdle } from '~/utils/lazyLoad'
@@ -31,28 +32,27 @@ function setDarkModeBaseColor(color: string) {
 export function useDark() {
   const isPreferredDark = usePreferredDark()
   const currentSystemColorScheme = computed(() => isPreferredDark.value ? 'dark' : 'light')
-  const currentAppColorScheme = computed((): 'dark' | 'light' => {
-    if (settings.value.theme !== 'auto')
-      return settings.value.theme
-    else
-      return currentSystemColorScheme.value
-  })
+  const { effectiveTheme, effectiveDarkModeBaseColor, isNetflixThemePack } = useThemePack()
+  // Derive currentAppColorScheme from effectiveTheme so that Netflix pack forces dark
+  // without mutating settings.value.theme.
+  const currentAppColorScheme = computed((): 'dark' | 'light' => effectiveTheme.value)
   const isDark = computed(() => currentAppColorScheme.value === 'dark')
   let themeChangeTimer: NodeJS.Timeout | null = null
 
-  // Watch for changes in the 'settings.value.theme' variable and add the 'dark' class to the 'mainApp' element
-  // to prevent some Unocss dark-specific styles from failing to take effect
+  // Watch for changes in effectiveTheme (covers settings.theme, themePack, and system pref)
+  // and add the 'dark' class to the 'mainApp' element to prevent some Unocss dark-specific
+  // styles from failing to take effect
   watch(
-    () => [settings.value.theme, isPreferredDark.value],
+    effectiveTheme,
     () => {
       setAppAppearance()
     },
     { immediate: true },
   )
 
-  // 监听深色模式基准颜色变化
+  // 监听有效深色模式基准颜色变化（Netflix 包时使用 #141414，否则使用用户设置）
   watch(
-    () => settings.value.darkModeBaseColor,
+    effectiveDarkModeBaseColor,
     (newColor) => {
       setDarkModeBaseColor(newColor)
       // 触发全局基准颜色变化事件
@@ -104,8 +104,8 @@ export function useDark() {
         document.documentElement.classList.add('bili_dark')
       }
 
-      // 确保深色模式基准颜色被正确应用
-      setDarkModeBaseColor(settings.value.darkModeBaseColor)
+      // 确保深色模式基准颜色被正确应用（使用 effective 值，Netflix 包时强制 #141414）
+      setDarkModeBaseColor(effectiveDarkModeBaseColor.value)
 
       setCookie('theme_style', 'dark', 365 * 10)
       window.dispatchEvent(new CustomEvent('global.themeChange', { detail: 'dark' }))
@@ -141,106 +141,123 @@ export function useDark() {
 
   function toggleDark(e: MouseEvent) {
     const updateThemeSettings = () => {
+      // Netflix pack owns the appearance — do not mutate settings.theme.
+      if (isNetflixThemePack.value)
+        return
+
       if (currentAppColorScheme.value !== currentSystemColorScheme.value)
         settings.value.theme = 'auto'
       else
         settings.value.theme = isPreferredDark.value ? 'light' : 'dark'
     }
 
-    const isAppearanceTransition = typeof document !== 'undefined'
-    // @ts-expect-error: Transition API
-      && document.startViewTransition
-      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!isAppearanceTransition) {
-      updateThemeSettings()
-    }
-    else {
-      const x = e.clientX
-      const y = e.clientY
-      const endRadius = Math.hypot(
-        Math.max(x, innerWidth - x),
-        Math.max(y, innerHeight - y),
-      )
-      // https://github.com/vueuse/vueuse/pull/3129
-      const style = document.createElement('style')
-      const styleString = `
-            *, *::before, *::after
-            {-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}`
-      style.appendChild(document.createTextNode(styleString))
-      document.head.appendChild(style)
-
-      const viewTransitionStyle = document.createElement('style')
-      viewTransitionStyle.textContent = `
-            ::view-transition-old(root),
-            ::view-transition-new(root) {
-              animation: none !important;
-              mix-blend-mode: normal;
-            }
-            `
-      document.head.appendChild(viewTransitionStyle)
-
-      // Since the above normal dom style cannot be applied in shadow dom style
-      // We need to add this style again to the shadow dom
-      const shadowDomStyle = document.createElement('style')
-      const shadowDomStyleString = `
-            *, *::before, *::after
-            {-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important; will-change: background}`
-      shadowDomStyle.appendChild(document.createTextNode(shadowDomStyleString))
-
-      const bewlyShadowRoot = document.getElementById('bewly')?.shadowRoot
-      const bewlyWrapper = bewlyShadowRoot?.getElementById('bewly-wrapper')
-      if (!bewlyWrapper)
-        throw new Error('mainAppRef is not found')
-
-      bewlyWrapper.appendChild(shadowDomStyle)
-
-      const transition = document.startViewTransition(async () => {
-        updateThemeSettings()
-        await nextTick()
-      })
-
-      transition.ready.then(() => {
-        const isDarkNow = document.documentElement.classList.contains('dark')
-
-        const zIndexStyle = document.createElement('style')
-        zIndexStyle.textContent = `
-            ::view-transition-old(root) { z-index: ${isDarkNow ? 1 : 9999}; }
-            ::view-transition-new(root) { z-index: ${isDarkNow ? 9999 : 1}; }
-            `
-        document.head.appendChild(zIndexStyle)
-
-        const clipPath = [
-          `circle(0px at ${x}px ${y}px)`,
-          `circle(${endRadius}px at ${x}px ${y}px)`,
-        ]
-        const animation = document.documentElement.animate(
-          {
-            clipPath: isDarkNow ? clipPath : [...clipPath].reverse(),
-          },
-          {
-            duration: 300,
-            easing: 'ease-in-out',
-            pseudoElement: isDarkNow
-              ? '::view-transition-new(root)'
-              : '::view-transition-old(root)',
-          },
-        )
-
-        animation.finished.then(() => {
-          zIndexStyle.remove()
-        })
-      })
-
-      transition.finished.then(() => {
-        style.remove()
-        viewTransitionStyle.remove()
-        shadowDomStyle.remove()
-      })
-    }
+    runWithViewTransition(updateThemeSettings, e)
   }
 
   return {
     isDark,
     toggleDark,
   }
+}
+
+/**
+ * Run an update function wrapped in a view-transition animation.
+ * Falls back to a plain synchronous call when the View Transition API is
+ * unavailable (e.g. Firefox) so callers never need to guard themselves.
+ *
+ * Exported so that the theme-pack toggle (Task 3) can reuse it without
+ * duplicating Shadow-DOM-safe transition code.
+ */
+export function runWithViewTransition(update: () => void | Promise<void>, e: MouseEvent) {
+  const isAppearanceTransition = typeof document !== 'undefined'
+    // @ts-expect-error: Transition API
+    && document.startViewTransition
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  if (!isAppearanceTransition) {
+    update()
+    return
+  }
+
+  const x = e.clientX
+  const y = e.clientY
+  const endRadius = Math.hypot(
+    Math.max(x, innerWidth - x),
+    Math.max(y, innerHeight - y),
+  )
+  // https://github.com/vueuse/vueuse/pull/3129
+  const style = document.createElement('style')
+  const styleString = `
+        *, *::before, *::after
+        {-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}`
+  style.appendChild(document.createTextNode(styleString))
+  document.head.appendChild(style)
+
+  const viewTransitionStyle = document.createElement('style')
+  viewTransitionStyle.textContent = `
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+          animation: none !important;
+          mix-blend-mode: normal;
+        }
+        `
+  document.head.appendChild(viewTransitionStyle)
+
+  // Since the above normal dom style cannot be applied in shadow dom style
+  // We need to add this style again to the shadow dom
+  const shadowDomStyle = document.createElement('style')
+  const shadowDomStyleString = `
+        *, *::before, *::after
+        {-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important; will-change: background}`
+  shadowDomStyle.appendChild(document.createTextNode(shadowDomStyleString))
+
+  const bewlyShadowRoot = document.getElementById('bewly')?.shadowRoot
+  const bewlyWrapper = bewlyShadowRoot?.getElementById('bewly-wrapper')
+  if (!bewlyWrapper)
+    throw new Error('mainAppRef is not found')
+
+  bewlyWrapper.appendChild(shadowDomStyle)
+
+  const transition = document.startViewTransition(async () => {
+    await update()
+    await nextTick()
+  })
+
+  transition.ready.then(() => {
+    const isDarkNow = document.documentElement.classList.contains('dark')
+
+    const zIndexStyle = document.createElement('style')
+    zIndexStyle.textContent = `
+        ::view-transition-old(root) { z-index: ${isDarkNow ? 1 : 9999}; }
+        ::view-transition-new(root) { z-index: ${isDarkNow ? 9999 : 1}; }
+        `
+    document.head.appendChild(zIndexStyle)
+
+    const clipPath = [
+      `circle(0px at ${x}px ${y}px)`,
+      `circle(${endRadius}px at ${x}px ${y}px)`,
+    ]
+    const animation = document.documentElement.animate(
+      {
+        clipPath: isDarkNow ? clipPath : [...clipPath].reverse(),
+      },
+      {
+        duration: 300,
+        easing: 'ease-in-out',
+        pseudoElement: isDarkNow
+          ? '::view-transition-new(root)'
+          : '::view-transition-old(root)',
+      },
+    )
+
+    animation.finished.then(() => {
+      zIndexStyle.remove()
+    })
+  })
+
+  transition.finished.then(() => {
+    style.remove()
+    viewTransitionStyle.remove()
+    shadowDomStyle.remove()
+  })
 }

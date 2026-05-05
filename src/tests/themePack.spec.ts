@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useDark } from '~/composables/useDark'
 import { useThemePack } from '~/composables/useThemePack'
 import { settings } from '~/logic'
 
@@ -91,5 +92,23 @@ describe('useThemePack runtime model', () => {
     ;(settings.value as any).themePack = 'totally-bogus'
     const { isNetflixThemePack } = useThemePack()
     expect(isNetflixThemePack.value).toBe(false)
+  })
+})
+
+describe('useDark + useThemePack integration', () => {
+  beforeEach(() => {
+    settings.value.themePack = 'default'
+    settings.value.theme = 'auto'
+  })
+
+  it('toggleDark is a no-op for settings.theme when netflix pack is active', () => {
+    // Set state BEFORE invoking useDark() so its internal computeds capture the right values.
+    settings.value.theme = 'light'
+    settings.value.themePack = 'netflix'
+
+    const { toggleDark } = useDark()
+    toggleDark({ clientX: 0, clientY: 0 } as MouseEvent)
+
+    expect(settings.value.theme).toBe('light')
   })
 })

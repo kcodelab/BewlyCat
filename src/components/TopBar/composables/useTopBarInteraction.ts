@@ -10,6 +10,7 @@ import {
 } from '~/components/TopBar/constants/urls'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useDelayedHover } from '~/composables/useDelayedHover'
+import { useThemePack } from '~/composables/useThemePack'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -29,6 +30,8 @@ export function useTopBarInteraction() {
 
   // 获取 App Provider
   const { activatedPage, reachTop } = useBewlyApp()
+
+  const { shouldSuppressWallpaper } = useThemePack()
 
   // 监听 URL 变化，使其响应式
   const currentLocationHref = ref(window.location.href)
@@ -66,26 +69,34 @@ export function useTopBarInteraction() {
       return false
 
     if (activatedPage.value === AppPage.Search) {
-      if (settings.value.individuallySetSearchPageWallpaper) {
-        if (settings.value.searchPageWallpaper)
-          return true
-        return false
+      // Netflix 主题包抑制壁纸，TopBar 不应基于壁纸切换为白色图标
+      if (shouldSuppressWallpaper.value === false) {
+        if (settings.value.individuallySetSearchPageWallpaper) {
+          if (settings.value.searchPageWallpaper)
+            return true
+          return false
+        }
+        return !!settings.value.wallpaper
       }
-      return !!settings.value.wallpaper
+      return false
     }
     else if (activatedPage.value === AppPage.SearchResults) {
       // 搜索结果页使用全局壁纸设置
-      return !!settings.value.wallpaper
+      if (shouldSuppressWallpaper.value === false)
+        return !!settings.value.wallpaper
+      return false
     }
     else {
-      if (settings.value.wallpaper)
-        return true
+      if (shouldSuppressWallpaper.value === false) {
+        if (settings.value.wallpaper)
+          return true
 
-      if (settings.value.useSearchPageModeOnHomePage) {
-        if (settings.value.individuallySetSearchPageWallpaper && !!settings.value.searchPageWallpaper)
-          return true
-        else if (settings.value.wallpaper)
-          return true
+        if (settings.value.useSearchPageModeOnHomePage) {
+          if (settings.value.individuallySetSearchPageWallpaper && !!settings.value.searchPageWallpaper)
+            return true
+          else if (settings.value.wallpaper)
+            return true
+        }
       }
     }
     return false

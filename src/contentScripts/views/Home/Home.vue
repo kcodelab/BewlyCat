@@ -2,6 +2,7 @@
 import { useThrottleFn } from '@vueuse/core'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useThemePack } from '~/composables/useThemePack'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { gridLayout, settings } from '~/logic'
 import type { HomeTab } from '~/stores/mainStore'
@@ -13,6 +14,7 @@ import { HomeSubPage } from './types'
 
 const mainStore = useMainStore()
 const { handleBackToTop, homeActivatedPage } = useBewlyApp()
+const { shouldSuppressWallpaper } = useThemePack()
 const handleThrottledBackToTop = useThrottleFn((targetScrollTop: number = 0) => handleBackToTop(targetScrollTop), 1000)
 
 // ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
@@ -251,7 +253,7 @@ function toggleTabContentLoading(loading: boolean) {
     <!-- Home search page mode background -->
     <Transition name="bg">
       <div
-        v-if="settings.useSearchPageModeOnHomePage && settings.individuallySetSearchPageWallpaper && showSearchPageMode"
+        v-if="!shouldSuppressWallpaper && settings.useSearchPageModeOnHomePage && settings.individuallySetSearchPageWallpaper && showSearchPageMode"
         pos="absolute" w-screen h-580px z-0
         :style="{
           left: '50%',
