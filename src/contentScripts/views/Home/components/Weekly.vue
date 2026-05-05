@@ -1,16 +1,12 @@
 <script setup lang="ts">
-import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
-import type { PopularSeriesItem, PopularSeriesListResult, PopularSeriesOneResult, PopularSeriesVideoItem } from '~/models/video/popularSeries'
-import api from '~/utils/api'
-import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import type { PopularSeriesItem } from '~/models/video/popularSeries'
 
-interface VideoElement extends PopularSeriesVideoItem {
-  displayData?: Video
-}
+import type { WeeklyVideoElement } from '../composables/useWeeklyData'
+import { useWeeklyData } from '../composables/useWeeklyData'
 
 defineProps<{
   gridLayout: GridLayoutType
@@ -24,11 +20,8 @@ const emit = defineEmits<{
 
 const { handleBackToTop, handlePageRefresh, mainAppRef } = useBewlyApp()
 
-const isLoading = ref<boolean>(false)
+const { items: videoList, seriesList, activatedSeries, loading: isLoading, loadSeriesOne, initLoad } = useWeeklyData()
 
-const seriesList = ref<PopularSeriesItem[]>([])
-const activatedSeries = ref<PopularSeriesItem | null>(null)
-const videoList = ref<VideoElement[]>([])
 const noMoreContent = ref<boolean>(true) // 每周必看没有分页
 
 // 下拉选择器相关
@@ -64,31 +57,6 @@ watchEffect(() => {
     calculatePosition()
 }, { flush: 'pre' })
 
-// 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
-function transformWeeklyVideo(item: PopularSeriesVideoItem, rank: number): Video {
-  return {
-    id: Number(item.aid),
-    duration: item.duration,
-    title: decodeHtmlEntities(item.title),
-    desc: decodeHtmlEntities(item.desc),
-    cover: item.pic,
-    author: {
-      name: decodeHtmlEntities(item.owner?.name),
-      authorFace: item.owner?.face,
-      mid: item.owner?.mid,
-    },
-    view: item.stat?.view,
-    danmaku: item.stat?.danmaku,
-    like: item.stat?.like,
-    likeStr: item.stat?.like_str ?? item.stat?.like,
-    publishedTimestamp: item.pubdate,
-    bvid: item.bvid,
-    cid: item.cid,
-    rank,
-    threePointV2: [],
-  }
-}
-
 onMounted(() => {
   initData()
   initPageAction()
@@ -111,48 +79,29 @@ function initPageAction() {
   }
 }
 
-function initData() {
-  videoList.value.length = 0
-  seriesList.value.length = 0
-  activatedSeries.value = null
-  getSeriesList()
+async function initData() {
+  emit('beforeLoading')
+  try {
+    await initLoad()
+    if (activatedSeries.value) {
+      handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
+    }
+  }
+  finally {
+    emit('afterLoading')
+  }
 }
 
-function getSeriesList() {
-  api.ranking.getPopularSeriesList()
-    .then((res: PopularSeriesListResult) => {
-      if (res && res.code === 0 && res.data && Array.isArray(res.data.list)) {
-        // sort by number desc (latest first) if available
-        seriesList.value = [...res.data.list].sort((a, b) => (b.number || 0) - (a.number || 0))
-        if (seriesList.value.length) {
-          // 默认选择第一期（通常为最新期）
-          activatedSeries.value = seriesList.value[0]
-          handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
-          getSeriesOne()
-        }
-      }
-    })
-}
-
-function getSeriesOne() {
+async function getSeriesOne() {
   if (!activatedSeries.value)
     return
   emit('beforeLoading')
-  isLoading.value = true
-  videoList.value.length = 0
-  api.ranking.getPopularSeriesOne({
-    number: (activatedSeries.value as PopularSeriesItem).number,
-  }).then((res: PopularSeriesOneResult) => {
-    if (res && res.code === 0 && res.data && Array.isArray(res.data.list)) {
-      videoList.value = res.data.list.map((item, index) => ({
-        ...item,
-        displayData: transformWeeklyVideo(item, index + 1),
-      }))
-    }
-  }).finally(() => {
-    isLoading.value = false
+  try {
+    await loadSeriesOne(activatedSeries.value)
+  }
+  finally {
     emit('afterLoading')
-  })
+  }
 }
 
 function selectSeries(item: PopularSeriesItem) {
@@ -295,8 +244,8 @@ defineExpose({ initData })
         :grid-layout="gridLayout"
         :loading="isLoading"
         :no-more-content="noMoreContent"
-        :transform-item="(item: VideoElement) => item.displayData"
-        :get-item-key="(item: VideoElement) => item.aid"
+        :transform-item="(item: WeeklyVideoElement) => item.displayData"
+        :get-item-key="(item: WeeklyVideoElement) => item.aid"
         show-preview
         @refresh="initData"
         @load-more="() => {}"
