@@ -12,6 +12,25 @@
 
 <p align="center">只需对您的 Bilibili 主页进行一些小更改即可。</p>
 
+## ✨ Netflix 主题
+
+> 1.7.0 起内置「Netflix 主题包」，把 B 站首页改成 Netflix 风格的 hero + 横向 row + 全频道入口布局。
+
+<p align="center">
+  <img alt="Netflix 主题首页预览" src="./assets/screenshots/netflix-home.jpg" />
+</p>
+
+主要特性：
+
+- **顶部 Hero 区**：自动轮播 3 张高质量推荐封面，全宽磨砂渐变融入背景；置顶时顶栏透明，向下滚动后渐变到纯色
+- **横向 row 布局**：继续观看 / TOP 10 今日热播 / 热门推荐 / 关注 / 订阅系列等，鼠标 hover 出左右切换箭头
+- **悬停浮层**：卡片悬停 ~500ms 后弹出大播放键 + 加入稍后再看 + 详情，用 Vue Teleport 避免被横向 row 裁切
+- **页尾全频道入口**：21 个 B 站分区一键直达（动画 / 番剧 / 国创 / 电影 / 电视剧 / 综艺 / 游戏 / 知识 / 科技 / 美食 / 鬼畜 / 影视 等）
+- **顶栏分类导航**：首页 / 番剧 在 BewlyCat 内路由切换；电影 / 游戏 / 科技 同 tab 跳 B 站原页
+- **零回归切换**：默认主题完全不动，所有 Netflix 改动隔离在 `themePack='netflix'` 下；主色 / 壁纸等设置走 effective override，不改写你的持久化偏好
+
+启用：扩展设置 → 外观 → 主题包 → 选 Netflix。切换瞬间走 view-transition 径向动画过渡（Chrome）。
+
 ## 👋 介绍
 
 > [!IMPORTANT]
@@ -47,6 +66,9 @@
 11. 视频详情页稍后再看外置
 12. 自定义暗色基准色，开启后会根据基准色调整暗黑模式的显示
 13. 新增合集视频保持默认播放模式功能
+14. **Netflix 主题包（1.7.0+）**：首页 Netflix 风格重做（hero 轮播 + 横向 row + 21 频道入口 + 卡片悬停浮层 + 顶栏滚动透明度），详见上文 [✨ Netflix 主题](#-netflix-主题) 段落
+15. App 层加 KeepAlive max=3，sidebar 切换 tab 第二次起近即时，不再每次都重 mount 整页
+16. `useThemePack` / 各 home 数据 composable 单例化，多组件共享同一份响应式状态，减少切换开销
 
 ### 删除功能
 
