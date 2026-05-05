@@ -708,6 +708,18 @@ topbar:
     sticker: 上传贴纸
     video: 上传视频
     manager: 投稿管理
+  nav_home: 首页
+  nav_anime: 番剧
+  nav_movie: 电影
+  nav_game: 游戏
+  nav_tech: 科技
+  my_list: 我的列表
+  my_list_favorites: 收藏夹
+  my_list_watchlater: 稍后再看
+  my_list_bangumi: 追番
+  my_list_moments: 动态
+  my_list_history: 历史
+  my_list_settings: 设置
 dock:
   search: 搜索
   home: 首页

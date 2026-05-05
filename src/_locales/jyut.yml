@@ -657,6 +657,18 @@ topbar:
     sticker: 出貼圖
     video: Po 片
     manager: 內容管理
+  nav_home: 首頁
+  nav_anime: 番劇
+  nav_movie: 電影
+  nav_game: 遊戲
+  nav_tech: 科技
+  my_list: 我嘅清單
+  my_list_favorites: 收藏夾
+  my_list_watchlater: 陣間至睇
+  my_list_bangumi: 追番
+  my_list_moments: 動向
+  my_list_history: 睇片記錄
+  my_list_settings: 設定
 dock:
   search: 搵嘢
   home: 主頁

@@ -782,6 +782,18 @@ topbar:
     sticker: Sticker
     video: Video
     manager: Manager
+  nav_home: Home
+  nav_anime: Anime
+  nav_movie: Movies
+  nav_game: Gaming
+  nav_tech: Technology
+  my_list: My List
+  my_list_favorites: Favorites
+  my_list_watchlater: Watch Later
+  my_list_bangumi: Following Anime
+  my_list_moments: Moments
+  my_list_history: History
+  my_list_settings: Settings
 dock:
   search: Search
   home: Home

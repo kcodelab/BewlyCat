@@ -723,6 +723,18 @@ topbar:
     sticker: 上傳貼圖
     video: 上傳影片
     manager: 內容管理
+  nav_home: 首頁
+  nav_anime: 番劇
+  nav_movie: 電影
+  nav_game: 遊戲
+  nav_tech: 科技
+  my_list: 我的清單
+  my_list_favorites: 收藏夾
+  my_list_watchlater: 稍後觀看
+  my_list_bangumi: 追番
+  my_list_moments: 動態
+  my_list_history: 歷史
+  my_list_settings: 設定
 dock:
   search: 搜尋
   home: 首頁

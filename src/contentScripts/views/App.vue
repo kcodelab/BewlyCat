@@ -6,6 +6,7 @@ import { provide, ref } from 'vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
+import { useThemePack } from '~/composables/useThemePack'
 import { BEWLY_MOUNTED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_PAGE_SWITCH_BEWLY, IFRAME_PAGE_SWITCH_BILI, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
@@ -27,6 +28,7 @@ function isFestivalPage(): boolean {
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
 const topBarStore = useTopBarStore()
+const { isNetflixThemePack } = useThemePack()
 
 // Conditionally use dark mode (skip on festival pages)
 let isDark: Ref<boolean>
@@ -479,6 +481,14 @@ function handleDockItemClick(dockItem: DockItem) {
   }
 }
 
+function handleNetflixNavigate(page: AppPage) {
+  if (!isHomePage()) {
+    location.href = `https://www.bilibili.com/?page=${page}`
+    return
+  }
+  changeActivatePage(page)
+}
+
 function changeActivatePage(pageName: AppPage) {
   const scrollTop: number = scrollViewportRef.value?.scrollTop ?? 0
 
@@ -833,7 +843,7 @@ if (settings.value.cleanUrlArgument) {
       }"
     >
       <Dock
-        v-if="!settings.useOriginalBilibiliHomepage && (settings.alwaysUseDock || (showBewlyPage || iframePageURL))"
+        v-if="!isNetflixThemePack && !settings.useOriginalBilibiliHomepage && (settings.alwaysUseDock || (showBewlyPage || iframePageURL))"
         pointer-events-auto
         :activated-page="activatedPage"
         @settings-visibility-change="toggleSettings"
@@ -860,11 +870,19 @@ if (settings.value.cleanUrlArgument) {
         transition: 'opacity 0.2s ease',
       }"
     >
-      <BewlyOrBiliTopBarSwitcher v-if="settings.showBewlyOrBiliTopBarSwitcher" />
-
-      <TopBar
-        pos="top-0 left-0" z="99 hover:1001" w-full
-      />
+      <template v-if="isNetflixThemePack">
+        <TopBarNetflix
+          pos="top-0 left-0" z="99 hover:1001" w-full
+          @navigate="handleNetflixNavigate"
+          @open-settings="toggleSettings"
+        />
+      </template>
+      <template v-else>
+        <BewlyOrBiliTopBarSwitcher v-if="settings.showBewlyOrBiliTopBarSwitcher" />
+        <TopBar
+          pos="top-0 left-0" z="99 hover:1001" w-full
+        />
+      </template>
     </div>
 
     <div
