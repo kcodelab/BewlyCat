@@ -53,10 +53,12 @@ Output of this snapshot lives in PR description, not in code.
 - Modify: `src/components/AppBackground.vue`
   Responsibility: gate wallpaper rendering on `shouldSuppressWallpaper` at every existing read site.
 - Modify: `src/components/TopBar/composables/useTopBarInteraction.ts`
-  Responsibility: gate wallpaper-dependent top bar behavior through effective wallpaper state.
-- Modify: any component that reads `settings.value.themeColor` / `darkModeBaseColor` / `useLinearGradientThemeColorBackground` / `searchPageLogoColor` for runtime CSS-variable assignment, to consume the `effective*` equivalents (locate via `grep -rn 'themeColor\|darkModeBaseColor\|useLinearGradientThemeColorBackground\|searchPageLogoColor' src/`).
-- Modify: `src/contentScripts/views/Home/Home.vue`
-  Responsibility: become a thin shell that switches between `HomeClassic` and `HomeNetflix`.
+  Responsibility: gate wallpaper-dependent top bar behavior through effective wallpaper state. **(Task 2)**
+- Modify: `src/contentScripts/views/Home/Home.vue` **(Task 2)**
+  Responsibility: gate the existing Home search-page-mode wallpaper branch on `shouldSuppressWallpaper`, because it currently reads `settings.searchPageWallpaper` directly at line ~266 (also lines ~277 / ~283 for blur intensity and mask opacity).
+- Modify: any component that reads `settings.value.themeColor` / `darkModeBaseColor` / `useLinearGradientThemeColorBackground` / `searchPageLogoColor` for runtime CSS-variable assignment, to consume the `effective*` equivalents (locate via `grep -rn 'themeColor\|darkModeBaseColor\|useLinearGradientThemeColorBackground\|searchPageLogoColor' src/`). **(Task 2)**
+- Modify: `src/contentScripts/views/Home/Home.vue` **(Task 4)** — second touch
+  Responsibility: become a thin shell that switches between `HomeClassic` and `HomeNetflix`. The Task 2 wallpaper gate added above must be carried into `HomeClassic.vue` during migration (see Task 4 migration checklist).
 - Create: `src/contentScripts/views/Home/HomeClassic.vue`
   Responsibility: preserve current tab + subpage Home behavior; line-for-line migration of the existing `Home.vue` body.
 - Create: `src/contentScripts/views/Home/netflix/HomeNetflix.vue`
@@ -83,9 +85,11 @@ Output of this snapshot lives in PR description, not in code.
 - Modify: `src/components/VideoCard/composables/useVideoCardLogic.ts` (or whichever composable currently owns preview gating; locate via grep)
   Responsibility: derive `isClassicVariant` once and AND every preview-related computed with it.
 - Modify: `src/components/Settings/Appearance/Appearance.vue`
-  Responsibility: add the Theme Pack selector + descriptive copy; disable `theme` selector + show locked-by-pack hint when `themePack === 'netflix'`.
+  Responsibility: add the Theme Pack selector + descriptive copy; disable every Appearance control whose runtime effect is owned by the pack (`theme`, `themeColor`, `darkModeBaseColor`, `useLinearGradientThemeColorBackground`) and show the locked-by-pack hint.
+- Modify: `src/components/Settings/PluginComponentsAndPages/SearchPage/SearchPage.vue`
+  Responsibility: disable the `searchPageLogoColor` controls (the two logo color buttons) when `themePack === 'netflix'` and show the locked-by-pack hint, mirroring Appearance.vue behavior. Decision #8 effective-overrides this value at runtime, so the UI must not let users change it without effect.
 - Modify: `src/_locales/en.yml`, `src/_locales/cmn-CN.yml`, `src/_locales/cmn-TW.yml`, `src/_locales/jyut.yml`
-  Responsibility: add i18n strings for Theme Pack UI in **all four locales** (no auto-translation).
+  Responsibility: add i18n strings for Theme Pack UI in all four locales; if fluent Cantonese text is unavailable, `jyut.yml` may temporarily mirror an already-translated Chinese variant and the PR must call that out explicitly.
 - Create: `src/tests/themePack.spec.ts`
 - Create: `src/tests/homeRowRegistry.spec.ts`
 - Create: `src/tests/videoCard.variant.spec.ts`
@@ -277,12 +281,13 @@ git commit -m "feat(theme-pack): add runtime override composable and storage fie
 
 ## Task 2: Wire Effective Overrides Into Existing Consumers
 
-**Goal:** Every existing read of `settings.value.{theme,themeColor,darkModeBaseColor,useLinearGradientThemeColorBackground,searchPageLogoColor,wallpaper,searchPageWallpaper}` that drives runtime appearance switches to the corresponding `effective*` ref. `useDark.toggleDark` short-circuits in Netflix mode and exposes a `runWithViewTransition` helper for the theme-pack toggle to reuse.
+**Goal:** Every existing read of `settings.value.{theme,themeColor,darkModeBaseColor,useLinearGradientThemeColorBackground,searchPageLogoColor,wallpaper,searchPageWallpaper}` that drives runtime appearance switches to the corresponding `effective*` ref or `shouldSuppressWallpaper`. `useDark.toggleDark` short-circuits in Netflix mode and exposes a `runWithViewTransition` helper for the theme-pack toggle to reuse.
 
 **Files:**
 - Modify: `src/composables/useDark.ts`
 - Modify: `src/components/AppBackground.vue`
 - Modify: `src/components/TopBar/composables/useTopBarInteraction.ts`
+- Modify: `src/contentScripts/views/Home/Home.vue`
 - Modify: any other file located via the grep below
 - Test: `src/tests/themePack.spec.ts` (extend with regression coverage)
 
@@ -296,6 +301,7 @@ grep -rn "settings\.value\.theme\b\|settings\.value\.themeColor\|settings\.value
 
 For each hit, decide:
 - **runtime appearance consumer** → must switch to `effective*`
+- **runtime wallpaper consumer** → must gate on `shouldSuppressWallpaper`, including Home search-page-mode branches outside `AppBackground.vue`
 - **settings UI write site** → keep writing `settings.value.*` (user intent)
 - **persistence/migration code** → keep as-is
 
@@ -317,6 +323,11 @@ it('toggleDark is a no-op for settings.theme when netflix pack is active', () =>
 
 it('AppBackground gates rendering on shouldSuppressWallpaper', () => {
   // mount AppBackground in suppressed and unsuppressed states; assert wallpaper element absent in suppressed.
+})
+
+it('Home search-page-mode background is suppressed in netflix pack', () => {
+  // mount Home with `useSearchPageModeOnHomePage=true`, `individuallySetSearchPageWallpaper=true`,
+  // and `themePack=netflix`; assert the wallpaper background branch does not render.
 })
 ```
 
@@ -364,6 +375,16 @@ const searchWallpaperUrl = computed(() => shouldSuppressWallpaper.value ? '' : s
 </script>
 ```
 
+`Home.vue` changes: guard the existing search-page-mode wallpaper subtree so Netflix mode cannot leak `settings.searchPageWallpaper` through Home's own background path.
+
+```vue
+<div
+  v-if="!shouldSuppressWallpaper && settings.useSearchPageModeOnHomePage && settings.individuallySetSearchPageWallpaper && showSearchPageMode"
+>
+  <!-- existing wallpaper branch -->
+</div>
+```
+
 `useTopBarInteraction.ts`: gate the existing wallpaper-aware branches on `shouldSuppressWallpaper.value === false`.
 
 For each runtime consumer of `themeColor` / `darkModeBaseColor` / `useLinearGradientThemeColorBackground` / `searchPageLogoColor` (locations from Step 1), swap to the `effective*` ref. Settings UI files keep reading/writing the persistent `settings.*` (user intent).
@@ -392,16 +413,19 @@ git commit -m "feat(theme-pack): route appearance/wallpaper consumers through ef
 
 ## Task 3: Settings UI
 
-**Goal:** Add the Theme Pack selector. When `themePack === 'netflix'`, disable the existing theme (light/dark/auto) radio with a tooltip explaining Netflix locks it.
+**Goal:** Add the Theme Pack selector. When `themePack === 'netflix'`, disable every Appearance control whose runtime effect is overridden by the pack, with a tooltip explaining the lock.
 
 **Files:**
 - Modify: `src/components/Settings/Appearance/Appearance.vue`
+- Modify: `src/components/Settings/PluginComponentsAndPages/SearchPage/SearchPage.vue`
 - Modify: `src/_locales/en.yml`
 - Modify: `src/_locales/cmn-CN.yml`
 - Modify: `src/_locales/cmn-TW.yml`
 - Modify: `src/_locales/jyut.yml`
 
-- [ ] **Step 1: Add UI** — radio group bound to `settings.themePack`; existing theme radio gains `:disabled="settings.themePack === 'netflix'"` plus a hover hint.
+- [ ] **Step 1: Add UI** — radio group (themePack) bound to `settings.themePack` in `Appearance.vue`. When `settings.themePack === 'netflix'`, disable + lock-tooltip the following controls (decisions #2 / #8 effective-override these at runtime):
+  - In `Appearance.vue`: `theme`, `themeColor`, `darkModeBaseColor`, `useLinearGradientThemeColorBackground`
+  - In `SearchPage.vue`: the two `searchPageLogoColor` buttons
 
 - [ ] **Step 2: Add i18n keys in all four locales** (do not auto-translate; native or careful manual translation only):
 
@@ -438,12 +462,12 @@ settings:
   theme_locked_by_pack: 由 Netflix 佈景主題包鎖定
 ```
 
-**jyut.yml policy** — current BewlyCat convention (per `docs/CONTRIBUTING.md`) explicitly bans pseudo-translation tooling and prefers honest fallback. **Do NOT** copy zh-TW into jyut as a placeholder; that produces confusing "fake Cantonese" entries that look correct but aren't. Instead:
+**jyut.yml policy** — current BewlyCat convention allows reusing another language you have already translated when you are not fluent, as long as you call that out in the PR. Therefore:
 
-- **Option A (preferred)**: leave the new keys **out of jyut.yml**. vue-i18n's fallback chain falls back to English (project default fallback), which is preferable to wrong Cantonese.
-- **Option B**: ship with native Cantonese translation provided by a fluent maintainer.
+- Preferred: provide native Cantonese wording if available.
+- Acceptable fallback: mirror the reviewed Traditional Chinese wording for these new keys in `jyut.yml`, then note that limitation in the PR.
 
-Default plan: take Option A; add an entry to PR description: "jyut.yml entries deferred — fallback will use English until a Cantonese-fluent contributor adds them." Update CHANGELOG accordingly.
+Do not leave the keys absent if the acceptance criteria require all four locale files to be updated.
 
 - [ ] **Step 3: Switching transition** — the radio's `@change` handler calls `runWithViewTransition` (from Task 2) before writing `settings.value.themePack`. The wrapper handles shadow-DOM-safe transitions; if `document.startViewTransition` is unavailable (Firefox), it must fall back to a no-op write.
 
@@ -454,7 +478,7 @@ pnpm typecheck
 pnpm lint
 ```
 
-Manual: open the extension, switch themePack twice, confirm the page transitions and the theme radio greys out under Netflix.
+Manual: open the extension, switch themePack twice, confirm the page transitions and that `theme`, `themeColor`, `darkModeBaseColor`, and gradient controls all grey out under Netflix.
 
 - [ ] **Step 5: Commit**
 
@@ -486,6 +510,7 @@ Document inline in this task (paste into PR), based on Task 0's snapshot:
 - [ ] Async-component map for sub-pages
 - [ ] Lifecycle hooks (`onMounted`, `onActivated`, etc.)
 - [ ] CSS / class scoping
+- [ ] **`shouldSuppressWallpaper` gate added in Task 2 must be carried into `HomeClassic.vue`** (the search-page-mode wallpaper / blur / mask branches at lines ~266 / ~277 / ~283). HomeNetflix has no search-page mode and does not render those branches, so no gate is needed there.
 
 - [ ] **Step 2: Implement the shell**
 
@@ -980,9 +1005,9 @@ git commit -m "chore(release): netflix theme pack changelog and version bump"
 - Every task lists a **rollback boundary** so any single failure can be reverted without cascading.
 - TDD pattern enforced: every code-introducing task has a failing test → implementation → green test → commit.
 - No string-matching tests; behavior assertions only.
-- i18n: en + cmn-CN + cmn-TW given verbatim; jyut entries deliberately omitted (decision in Task 3) so vue-i18n falls back to English rather than fake-Cantonese, per BewlyCat's CONTRIBUTING.md ban on machine-translation placeholders.
+- i18n: en + cmn-CN + cmn-TW given verbatim; `jyut.yml` follows Task 3's clarified policy: native Cantonese if available, otherwise mirror reviewed Traditional Chinese wording and call the limitation out in the PR.
 - `useDark.toggleDark` short-circuit is the resolution to the spec's "do not mutate persistent settings" decision; called out explicitly in Task 2 Step 4.
-- Wallpaper suppression covers `AppBackground.vue` (the main consumer the previous draft missed) plus TopBar and Search.
+- Wallpaper suppression covers `AppBackground.vue` plus the previously missed Home search-page-mode branch, TopBar, and Search.
 - Singleton data composables avoid duplicate fetches between Classic and Netflix layouts.
 - `defineAsyncComponent` configured with `delay: 0` + `loadingComponent` to avoid white-flash during view-transition.
 - VideoCard regression on video detail page explicitly verified in Task 7 Step 5.
