@@ -93,50 +93,12 @@ function isNavActive(page: AppPage): boolean {
   return activatedPage.value === page
 }
 
-// Reactive current href: B 站 client-side router can change URL after mount
-// (e.g. /v/game/ → /v/game-center/featured)，window.location.href 不是响应式的，
-// 必须手动监听 popstate/pushstate/replaceState 同步到 ref 才能让 :class 重算。
-const currentHref = ref(window.location.href)
-
-function syncHref() {
-  currentHref.value = window.location.href
-}
-
-function patchHistory() {
-  const orig = { push: history.pushState, replace: history.replaceState }
-  history.pushState = function (...args) {
-    const r = orig.push.apply(this, args)
-    window.dispatchEvent(new Event('bewly-locationchange'))
-    return r
-  }
-  history.replaceState = function (...args) {
-    const r = orig.replace.apply(this, args)
-    window.dispatchEvent(new Event('bewly-locationchange'))
-    return r
-  }
-  return () => {
-    history.pushState = orig.push
-    history.replaceState = orig.replace
-  }
-}
-
-let restoreHistory: (() => void) | null = null
-onMounted(() => {
-  window.addEventListener('popstate', syncHref)
-  window.addEventListener('hashchange', syncHref)
-  window.addEventListener('bewly-locationchange', syncHref)
-  restoreHistory = patchHistory()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('popstate', syncHref)
-  window.removeEventListener('hashchange', syncHref)
-  window.removeEventListener('bewly-locationchange', syncHref)
-  restoreHistory?.()
-})
-
+// 外部分类全是 same-tab 跳转 → 整页 reload → BewlyCat 重新挂载，
+// currentHref 自然是新值。无需响应式跟踪 URL 变化，更不必 monkey-patch
+// 全局 history（之前的 patch 在 B 站高频 pushState 场景下触发 reactive
+// 风暴，是首页"loading 1 分钟"的根因）。
 function isExternalNavActive(item: typeof externalNavItems[number]): boolean {
-  return item.urlPattern.test(currentHref.value)
+  return item.urlPattern.test(window.location.href)
 }
 
 function navigateTo(page: AppPage) {
