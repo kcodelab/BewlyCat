@@ -141,42 +141,50 @@ const hoverTargetRef = ref<HTMLElement | null>(null)
 provide('netflix-hover-target', hoverTargetRef)
 
 // ── Mount: trigger data loads ──────────────────────────────────────
-onMounted(async () => {
-  // Hero data sources
+onMounted(() => {
+  // 立即加载首屏需要的两个数据源（Hero + 热门推荐 row 共用）
   if (trending.items.value.length === 0)
     trending.load()
   if (forYou.videoList.value.length === 0)
     forYou.getData()
 
-  // SubPage rows — load each visible subpage
-  const visiblePages = (settings.value.homePageTabVisibilityList ?? [])
-    .filter(v => v.visible && v.page !== HomeSubPage.Ranking)
-    .map(v => v.page)
+  // 其他 SubPage row 延后到主线程空闲再触发，避免一次性挤爆 6 路并发上限
+  // 让 Hero 图片优先解码 + 渲染，首屏体感更快
+  const loadDeferred = () => {
+    const visiblePages = (settings.value.homePageTabVisibilityList ?? [])
+      .filter(v => v.visible && v.page !== HomeSubPage.Ranking)
+      .map(v => v.page)
 
-  for (const page of visiblePages) {
-    switch (page) {
-      case HomeSubPage.Following:
-        if (following.videoList.value.length === 0)
-          following.initData()
-        break
-      case HomeSubPage.SubscribedSeries:
-        if (subscribedSeries.items.value.length === 0)
-          subscribedSeries.load()
-        break
-      case HomeSubPage.Weekly:
-        if (weekly.items.value.length === 0)
-          weekly.initLoad()
-        break
-      case HomeSubPage.Live:
-        if (live.items.value.length === 0)
-          live.load()
-        break
-      case HomeSubPage.Precious:
-        if (precious.items.value.length === 0)
-          precious.load()
-        break
+    for (const page of visiblePages) {
+      switch (page) {
+        case HomeSubPage.Following:
+          if (following.videoList.value.length === 0)
+            following.initData()
+          break
+        case HomeSubPage.SubscribedSeries:
+          if (subscribedSeries.items.value.length === 0)
+            subscribedSeries.load()
+          break
+        case HomeSubPage.Weekly:
+          if (weekly.items.value.length === 0)
+            weekly.initLoad()
+          break
+        case HomeSubPage.Live:
+          if (live.items.value.length === 0)
+            live.load()
+          break
+        case HomeSubPage.Precious:
+          if (precious.items.value.length === 0)
+            precious.load()
+          break
+      }
     }
   }
+
+  if (typeof window.requestIdleCallback === 'function')
+    window.requestIdleCallback(loadDeferred, { timeout: 1500 })
+  else
+    setTimeout(loadDeferred, 250)
 })
 </script>
 
