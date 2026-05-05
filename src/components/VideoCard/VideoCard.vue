@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref, watch, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
@@ -164,12 +164,13 @@ const hoverPreviewOnCoverOnly = computed(() =>
 
 const linkEvents = computed(() => ({
   click: logic.handleClick,
-  ...(hoverPreviewOnCoverOnly.value
-    ? {}
-    : {
+  // In netflix-row variant the hover state machine is irrelevant; skip to avoid pointless isHover ticks
+  ...(isClassicVariant.value && !hoverPreviewOnCoverOnly.value
+    ? {
         mouseenter: logic.handleMouseEnter,
         mouseleave: logic.handelMouseLeave,
-      }),
+      }
+    : {}),
 }))
 
 const coverEvents = computed(() =>
@@ -217,6 +218,18 @@ function handleNetflixMouseLeave() {
     netflixHoverVisible.value = false
   }, 100)
 }
+
+// Cleanup netflix hover timers on unmount to prevent 500ms enter timer firing after teardown
+onBeforeUnmount(() => {
+  if (netflixHoverEnterTimer.value) {
+    clearTimeout(netflixHoverEnterTimer.value)
+    netflixHoverEnterTimer.value = null
+  }
+  if (netflixHoverLeaveTimer.value) {
+    clearTimeout(netflixHoverLeaveTimer.value)
+    netflixHoverLeaveTimer.value = null
+  }
+})
 
 const primaryTags = computed(() => {
   const video = props.video
