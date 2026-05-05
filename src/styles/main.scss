@@ -5,6 +5,13 @@
   // outline-offset: 2px;
 }
 
+// Suppress the browser focus ring on programmatically-focused containers
+// (e.g. the scroll viewport with tabindex="-1"). This prevents the red
+// Netflix theme-color outline from appearing at page edges.
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
 .dark {
   input,
   textarea {
