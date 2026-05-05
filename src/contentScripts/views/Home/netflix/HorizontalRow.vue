@@ -81,7 +81,7 @@ function scrollRight() {
             :key="item.bvid ?? item.id"
             class="netflix-row__card-wrapper"
           >
-            <VideoCard :video="item" />
+            <VideoCard :video="item" variant="netflix-row" />
           </div>
         </template>
       </div>

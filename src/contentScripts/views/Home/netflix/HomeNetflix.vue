@@ -1,7 +1,7 @@
 <!-- src/contentScripts/views/Home/netflix/HomeNetflix.vue -->
 <!-- pickHeroCandidate is a named export from ./heroUtils.ts (pure TS, importable in tests). -->
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, provide, ref } from 'vue'
 
 import { settings } from '~/logic'
 
@@ -135,6 +135,10 @@ function handleRowRetry(page: HomeSubPage) {
   }
 }
 
+// ── Hover-target ref for VideoCardHover Teleport (决议 #4) ────────
+const hoverTargetRef = ref<HTMLElement | null>(null)
+provide('netflix-hover-target', hoverTargetRef)
+
 // ── Mount: trigger data loads ──────────────────────────────────────
 onMounted(async () => {
   // Hero data sources
@@ -176,7 +180,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="netflix-home">
+  <div ref="hoverTargetRef" class="netflix-home" style="position: relative;">
     <!-- Hero Banner -->
     <HeroBanner :video="heroVideo" />
 

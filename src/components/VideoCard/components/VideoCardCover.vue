@@ -11,6 +11,7 @@ import { settings } from '~/logic'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 
 import type { Video } from '../types'
+import VideoCardPreview from './VideoCardPreview.vue'
 
 interface Props {
   skeleton?: boolean
@@ -20,6 +21,8 @@ interface Props {
   removed: boolean
   isHover: boolean
   shouldHideOverlayElements: boolean
+  /** When false (netflix-row variant), the preview block is not rendered at all */
+  showPreview?: boolean
   previewVideoUrl: string
   videoElement: HTMLVideoElement | null
   isInWatchLater: boolean
@@ -52,7 +55,8 @@ const emit = defineEmits<{
   imageLoaded: []
 }>()
 
-const videoRef = ref<HTMLVideoElement | null>(null)
+const previewComponentRef = ref<InstanceType<typeof VideoCardPreview> | null>(null)
+const videoRef = computed(() => previewComponentRef.value?.videoRef ?? null)
 const isLoadingStream = ref<boolean>(false)
 const isPreviewFullscreen = ref<boolean>(false)
 const showVideoControls = ref<boolean>(false)
@@ -401,36 +405,16 @@ onBeforeUnmount(() => {
         </Button>
       </div>
 
-      <!-- Video preview -->
-      <Transition v-if="!removed && settings.enableVideoPreview" name="fade">
-        <div
-          v-if="previewVideoUrl && isHover"
-          pos="absolute top-0 left-0" w-full aspect-video rounded="$bew-radius" bg-black
-          @mousemove="handlePreviewMouseMove"
-        >
-          <video
-            ref="videoRef"
-            autoplay muted
-            :controls="showVideoControls"
-            :style="{ pointerEvents: showVideoControls ? 'auto' : 'none' }"
-            w-full h-full
-          />
-
-          <!-- Loading indicator -->
-          <Transition name="fade">
-            <div
-              v-if="isLoadingStream"
-              pos="absolute top-0 left-0"
-              w-full h-full
-              flex="~ items-center justify-center"
-              bg="black/50"
-              pointer-events-none
-            >
-              <div class="loading-spinner" />
-            </div>
-          </Transition>
-        </div>
-      </Transition>
+      <!-- Video preview (only rendered for classic/grid variant, gated by showPreview prop) -->
+      <VideoCardPreview
+        v-if="!removed && settings.enableVideoPreview && showPreview !== false"
+        ref="previewComponentRef"
+        :preview-video-url="previewVideoUrl"
+        :is-hover="isHover"
+        :show-video-controls="showVideoControls"
+        :is-loading-stream="isLoadingStream"
+        @mousemove="handlePreviewMouseMove"
+      />
 
       <!-- Ranking Number -->
       <div

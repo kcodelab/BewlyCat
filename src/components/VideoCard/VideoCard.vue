@@ -3,6 +3,7 @@ import { computed, ref, watch, watchEffect } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
+import VideoCardHover from '~/contentScripts/views/Home/netflix/VideoCardHover.vue'
 import { settings } from '~/logic'
 import type { VideoCardLayoutSetting } from '~/logic/storage'
 import { calcCurrentTime, calcTimeSince, numFormatter } from '~/utils/dataFormatter'
@@ -17,6 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
   showWatcherLater: true,
   type: 'common',
   moreBtn: true,
+  variant: 'grid',
 })
 
 interface Props {
@@ -29,7 +31,11 @@ interface Props {
   moreBtn?: boolean
   hideAuthor?: boolean
   isFollowingPage?: boolean
+  /** Layout variant. 'netflix-row' suppresses preview and renders 16:9 horizontal card. Default: 'grid' */
+  variant?: 'grid' | 'netflix-row'
 }
+
+const isClassicVariant = computed(() => props.variant !== 'netflix-row')
 
 const layout = computed((): VideoCardLayoutSetting => {
   const layoutSetting = settings.value.videoCardLayout as VideoCardLayoutSetting | undefined
@@ -37,7 +43,12 @@ const layout = computed((): VideoCardLayoutSetting => {
 })
 
 // 数据现在在转换阶段已经完成 HTML 解码，直接使用 props
-const logic = useVideoCardLogic(props)
+// For netflix-row variant: pass showPreview=false to logic so preview loading is suppressed
+const effectiveProps = computed(() => ({
+  ...props,
+  showPreview: isClassicVariant.value ? props.showPreview : false,
+}))
+const logic = useVideoCardLogic(effectiveProps)
 const { mainAppRef } = useBewlyApp()
 
 // 使用共享样式（避免每个卡片重复计算）
@@ -138,15 +149,17 @@ const hasCoverStats = computed(() => {
 })
 
 const shouldHideCoverStats = computed(() =>
-  props.showPreview
+  isClassicVariant.value
+  && props.showPreview
   && settings.value.enableVideoPreview
   && logic.isHover.value
   && logic.previewVideoUrl.value
   && logic.shouldHideOverlayElements.value,
 )
 
+// onlyCoverVideoPreview only applies in classic/grid variant
 const hoverPreviewOnCoverOnly = computed(() =>
-  Boolean(props.showPreview && settings.value.enableVideoPreview && settings.value.onlyCoverVideoPreview),
+  Boolean(isClassicVariant.value && props.showPreview && settings.value.enableVideoPreview && settings.value.onlyCoverVideoPreview),
 )
 
 const linkEvents = computed(() => ({
@@ -167,6 +180,43 @@ const coverEvents = computed(() =>
       }
     : {},
 )
+
+// ── Netflix-row hover overlay state ────────────────────────────────
+// Only active when variant === 'netflix-row'. Uses its own 500ms/100ms timers
+// (plan: hoverVideoCardDelayed is ignored in netflix-row mode).
+const netflixHoverVisible = ref(false)
+const netflixHoverPosition = ref<DOMRect | null>(null)
+const netflixHoverEnterTimer = ref<number | null>(null)
+const netflixHoverLeaveTimer = ref<number | null>(null)
+
+function handleNetflixMouseEnter() {
+  if (netflixHoverLeaveTimer.value) {
+    clearTimeout(netflixHoverLeaveTimer.value)
+    netflixHoverLeaveTimer.value = null
+  }
+  if (netflixHoverEnterTimer.value)
+    clearTimeout(netflixHoverEnterTimer.value)
+  netflixHoverEnterTimer.value = window.setTimeout(() => {
+    netflixHoverEnterTimer.value = null
+    if (logic.cardRootRef.value) {
+      netflixHoverPosition.value = logic.cardRootRef.value.getBoundingClientRect()
+    }
+    netflixHoverVisible.value = true
+  }, 500)
+}
+
+function handleNetflixMouseLeave() {
+  if (netflixHoverEnterTimer.value) {
+    clearTimeout(netflixHoverEnterTimer.value)
+    netflixHoverEnterTimer.value = null
+  }
+  if (netflixHoverLeaveTimer.value)
+    clearTimeout(netflixHoverLeaveTimer.value)
+  netflixHoverLeaveTimer.value = window.setTimeout(() => {
+    netflixHoverLeaveTimer.value = null
+    netflixHoverVisible.value = false
+  }, 100)
+}
 
 const primaryTags = computed(() => {
   const video = props.video
@@ -342,7 +392,7 @@ provide('getVideoType', () => props.type!)
 
 <template>
   <div
-    :ref="(el) => logic.cardRootRef.value = el as HTMLElement"
+    :ref="(el) => { logic.cardRootRef.value = el as HTMLElement }"
     class="video-card-container"
     duration-300 ease-in-out
     rounded="$bew-radius"
@@ -350,6 +400,7 @@ provide('getVideoType', () => props.type!)
       layout !== 'old' ? 'mb-3' : 'mb-4',
       skeleton ? 'video-card-container--skeleton' : 'video-card-container--interactive',
     ]"
+    v-on="!isClassicVariant && !skeleton ? { mouseenter: handleNetflixMouseEnter, mouseleave: handleNetflixMouseLeave } : {}"
   >
     <div
       class="video-card group"
@@ -379,7 +430,8 @@ provide('getVideoType', () => props.type!)
             :removed="logic.removed.value"
             :is-hover="logic.isHover.value"
             :should-hide-overlay-elements="Boolean(logic.shouldHideOverlayElements.value)"
-            :preview-video-url="logic.previewVideoUrl.value || ''"
+            :show-preview="isClassicVariant && showPreview"
+            :preview-video-url="isClassicVariant ? (logic.previewVideoUrl.value || '') : ''"
             :video-element="logic.videoElement.value || null"
             :is-in-watch-later="logic.isInWatchLater.value"
             :show-watcher-later="showWatcherLater"
@@ -437,6 +489,17 @@ provide('getVideoType', () => props.type!)
         @removed="logic.handleRemoved"
       />
     </Teleport>
+
+    <!-- Netflix-row hover overlay (Teleports to HomeNetflix container; 决议 #4) -->
+    <VideoCardHover
+      v-if="!isClassicVariant && props.video"
+      :video="props.video"
+      :position="netflixHoverPosition"
+      :visible="netflixHoverVisible"
+      :is-in-watch-later="logic.isInWatchLater.value"
+      @close="netflixHoverVisible = false"
+      @toggle-watch-later="logic.toggleWatchLater"
+    />
   </div>
 </template>
 
