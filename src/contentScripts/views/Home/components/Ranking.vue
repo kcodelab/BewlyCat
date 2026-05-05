@@ -1,22 +1,14 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import type { Video } from '~/components/VideoCard/types'
-import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
-import type { List as RankingVideoItem, RankingResult } from '~/models/video/ranking'
-import type { List as RankingPgcItem, RankingPgcResult } from '~/models/video/rankingPgc'
-import api from '~/utils/api'
-import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import type { List as RankingPgcItem } from '~/models/video/rankingPgc'
 
+import type { RankingVideoElement } from '../composables/useRankingData'
+import { useRankingData } from '../composables/useRankingData'
 import type { RankingType } from '../types'
-
-// 扩展 RankingVideoItem 以包含预处理的显示数据
-interface RankingVideoElement extends RankingVideoItem {
-  displayData?: Video
-}
 
 const props = defineProps<{
   gridLayout: GridLayoutType
@@ -30,6 +22,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { handleBackToTop, handlePageRefresh } = useBewlyApp()
+
+const { items: videoList, pgcItems: PgcList, loading: isLoading, initLoad } = useRankingData()
 
 const rankingTypes = computed((): RankingType[] => {
   return [
@@ -59,54 +53,20 @@ const rankingTypes = computed((): RankingType[] => {
   ]
 })
 
-const isLoading = ref<boolean>(false)
 const activatedRankingType = ref<RankingType>({ ...rankingTypes.value[0] })
-const videoList = reactive<RankingVideoElement[]>([])
-const PgcList = reactive<RankingPgcItem[]>([])
 const shouldMoveAsideUp = ref<boolean>(false)
 const noMoreContent = ref<boolean>(true) // 排行榜没有分页
 
-// 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
-function transformRankingVideo(item: RankingVideoItem, rank: number): Video {
-  return {
-    id: Number(item.aid),
-    duration: item.duration,
-    title: decodeHtmlEntities(item.title),
-    desc: decodeHtmlEntities(item.desc),
-    cover: item.pic,
-    author: {
-      name: decodeHtmlEntities(item.owner.name),
-      authorFace: item.owner.face,
-      mid: item.owner.mid,
-    },
-    view: item.stat.view,
-    danmaku: item.stat.danmaku,
-    like: item.stat.like,
-    likeStr: (item.stat as any)?.like_str ?? item.stat.like,
-    publishedTimestamp: item.pubdate,
-    bvid: item.bvid,
-    rank,
-    cid: item.cid,
-    threePointV2: [],
-  }
-}
-
 watch(() => activatedRankingType.value.id, () => {
   handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
-
   initData()
 })
 
 watch(() => props.topBarVisibility, () => {
   shouldMoveAsideUp.value = false
-
-  // Allow moving tabs up only when the top bar is not hidden & is set to auto-hide
-  // This feature is primarily designed to compatible with the Bilibili Evolved's top bar
-  // Even when the BewlyBewly top bar is hidden, the Bilibili Evolved top bar still exists, so not moving up
   if (settings.value.autoHideTopBar && settings.value.showTopBar) {
     if (props.topBarVisibility)
       shouldMoveAsideUp.value = false
-
     else
       shouldMoveAsideUp.value = true
   }
@@ -129,51 +89,14 @@ function initPageAction() {
   }
 }
 
-function initData() {
-  videoList.length = 0
-  PgcList.length = 0
-  getData()
-}
-
-function getData() {
-  if ('seasonType' in activatedRankingType.value)
-    getRankingPgc()
-  else
-    getRankingVideos()
-}
-
-function getRankingVideos() {
-  videoList.length = 0
+async function initData() {
   emit('beforeLoading')
-  isLoading.value = true
-  api.ranking.getRankingVideos({
-    rid: activatedRankingType.value.rid,
-    type: 'type' in activatedRankingType.value ? activatedRankingType.value.type : 'all',
-  }).then((response: RankingResult) => {
-    if (response.code === 0) {
-      const { list } = response.data
-      // 添加 displayData 预处理
-      const processedList = list.map((item, index) => ({
-        ...item,
-        displayData: transformRankingVideo(item, index + 1),
-      }))
-      Object.assign(videoList, processedList)
-    }
-  }).finally(() => {
-    isLoading.value = false
+  try {
+    await initLoad(activatedRankingType.value)
+  }
+  finally {
     emit('afterLoading')
-  })
-}
-
-function getRankingPgc() {
-  PgcList.length = 0
-  isLoading.value = true
-  api.ranking.getRankingPgc({
-    season_type: activatedRankingType.value.seasonType,
-  }).then((response: RankingPgcResult) => {
-    if (response.code === 0)
-      Object.assign(PgcList, response.data.list)
-  }).finally(() => isLoading.value = false)
+  }
 }
 
 defineExpose({ initData })
@@ -224,7 +147,7 @@ defineExpose({ initData })
           }"
         >
           <BangumiCard
-            v-for="pgc in PgcList"
+            v-for="pgc in (PgcList as RankingPgcItem[])"
             :key="pgc.url"
             :bangumi="{
               url: pgc.url,
