@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useThemePack } from '~/composables/useThemePack'
+import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isHomePage } from '~/utils/main'
+import emitter from '~/utils/mitt'
 
 import MyListMenu from './components/MyListMenu.vue'
 import NotificationsDrawer from './components/NotificationsDrawer.vue'
@@ -35,6 +37,25 @@ onMounted(() => {
 
 onUnmounted(() => {
   topBarStore.cleanup()
+})
+
+// Scroll-driven topbar transparency (Netflix style)
+const SCROLL_OPAQUE_THRESHOLD = 80
+const scrollTop = ref(0)
+const isScrolled = computed(() => scrollTop.value > SCROLL_OPAQUE_THRESHOLD)
+
+function handleScroll(top: number) {
+  scrollTop.value = top
+}
+
+onMounted(() => {
+  // 初始读一次原生 scrollTop（兜底，避免 mitt 事件首次触发前透明度异常）
+  scrollTop.value = document.documentElement.scrollTop
+  emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
+})
+
+onUnmounted(() => {
+  emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
 })
 
 // Internal nav items (those mapped to BewlyCat pages)
@@ -123,11 +144,11 @@ function handleOpenSettings() {
 </script>
 
 <template>
-  <header class="netflix-topbar">
+  <header class="netflix-topbar" :class="{ 'netflix-topbar--scrolled': isScrolled }">
     <div
       class="netflix-topbar__inner"
       max-w="$bew-page-max-width"
-      flex="~ items-center justify-between gap-4"
+      flex="~ items-center gap-4"
       p="x-8"
       m-auto
       h="$bew-top-bar-height"
@@ -144,8 +165,8 @@ function handleOpenSettings() {
         </a>
       </div>
 
-      <!-- Center: Nav items -->
-      <nav class="netflix-topbar__nav" flex="~ items-center gap-1" shrink-0>
+      <!-- Nav items (紧靠 logo 左对齐) -->
+      <nav class="netflix-topbar__nav" flex="~ items-center gap-2" shrink-0>
         <!-- Internal BewlyCat page nav items -->
         <button
           v-for="item in internalNavItems"
@@ -153,12 +174,6 @@ function handleOpenSettings() {
           class="netflix-nav-item"
           :class="{ active: isNavActive(item.page) }"
           :style="isNavActive(item.page) ? { '--nav-underline-color': effectiveThemeColor } : {}"
-          px-3 py-2
-          text="$bew-text-1 sm"
-          fw-semibold
-          cursor-pointer
-          duration-200
-          rounded-md
           @click="navigateTo(item.page)"
         >
           {{ $t(item.labelKey) }}
@@ -171,12 +186,6 @@ function handleOpenSettings() {
           class="netflix-nav-item"
           :class="{ active: isExternalNavActive(item) }"
           :style="isExternalNavActive(item) ? { '--nav-underline-color': effectiveThemeColor } : {}"
-          px-3 py-2
-          text="$bew-text-1 sm"
-          fw-semibold
-          cursor-pointer
-          duration-200
-          rounded-md
           @click="openExternal(item.url)"
         >
           {{ $t(item.labelKey) }}
@@ -189,8 +198,8 @@ function handleOpenSettings() {
         />
       </nav>
 
-      <!-- Right: Search + TopBarRight -->
-      <div class="netflix-topbar__right" flex="~ items-center gap-3" shrink-0>
+      <!-- Right: Search + TopBarRight (推到最右) -->
+      <div class="netflix-topbar__right" flex="~ items-center gap-3" shrink-0 ml-auto>
         <!-- 固定宽度容器防止 TopBarSearch（flex:1 w-full）吞噬右侧剩余空间
              把头像等组件挤出可视区。小屏幕用更窄宽度避免溢出。 -->
         <div w="240px lg:280px" shrink-0>
@@ -222,8 +231,22 @@ function handleOpenSettings() {
   right: 0;
   z-index: 10000;
   width: 100%;
+  /* 顶部置顶时：透明 + 自上而下渐变（黑→透明），让顶部文字可读但不挡 hero */
+  background-color: transparent;
+  background-image: linear-gradient(to bottom, rgba(20, 20, 20, 0.7) 0%, rgba(20, 20, 20, 0) 100%);
+  border-bottom: 1px solid transparent;
+  transition:
+    background-color 0.25s ease,
+    background-image 0.25s ease,
+    border-bottom-color 0.25s ease;
+  /* Backdrop 透明时不需要 backdrop-filter，避免性能浪费 */
+}
+
+/* 滚动超过阈值后：填纯色 + 显示分隔底边 */
+.netflix-topbar--scrolled {
   background-color: var(--bew-bg);
-  border-bottom: 1px solid var(--bew-border-color, rgba(255, 255, 255, 0.06));
+  background-image: none;
+  border-bottom-color: var(--bew-border-color, rgba(255, 255, 255, 0.06));
 }
 
 .netflix-topbar__inner {
@@ -254,21 +277,33 @@ function handleOpenSettings() {
   background: transparent;
   border: none;
   outline: none;
-  color: var(--bew-text-1);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1;
+  transition:
+    color 0.2s,
+    background 0.2s;
+  white-space: nowrap;
 
   &:hover {
-    background: var(--bew-fill-2);
-    color: var(--bew-text-1);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
   }
 
   &.active {
+    color: #fff;
+
     &::after {
       content: "";
       position: absolute;
-      bottom: -2px;
+      bottom: -4px;
       left: 50%;
       transform: translateX(-50%);
-      width: 60%;
+      width: 70%;
       height: 2px;
       background-color: var(--nav-underline-color, var(--bew-theme-color));
       border-radius: 2px;
