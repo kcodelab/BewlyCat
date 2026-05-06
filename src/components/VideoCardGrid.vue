@@ -105,6 +105,18 @@ interface VideoCardGridProps<T = any> {
   enableRowPadding?: boolean
 
   /**
+   * 加载更多时是否在列表末尾插入骨架屏
+   * @default true
+   */
+  showLoadingMoreSkeleton?: boolean
+
+  /**
+   * 加载更多时插入的骨架屏数量
+   * @default 10
+   */
+  loadingMoreSkeletonCount?: number
+
+  /**
    * 是否为 Following 页面
    * 用于在右键菜单中默认显示"取消关注"选项
    * @default false
@@ -130,6 +142,8 @@ const props = withDefaults(defineProps<VideoCardGridProps<T>>(), {
   initialSkeletonCount: 30,
   isSkeletonItem: undefined,
   enableRowPadding: false,
+  showLoadingMoreSkeleton: true,
+  loadingMoreSkeletonCount: 10,
   requestFailed: false,
 })
 
@@ -207,7 +221,7 @@ const paddingSkeletonItems = computed(() => {
 
 // 是否正在加载更多（数据已达阈值且loading）
 const isLoadingMore = computed(() => {
-  return props.loading && props.items.length >= MIN_ITEMS_TO_RENDER
+  return props.showLoadingMoreSkeleton && props.loading && props.items.length >= MIN_ITEMS_TO_RENDER
 })
 
 // 生成加载更多时的骨架屏数据（使用固定数量，由 CSS Grid 自动处理布局）
@@ -215,8 +229,8 @@ const loadingMoreSkeletonItems = computed(() => {
   if (!isLoadingMore.value)
     return []
 
-  // 加载更多时显示固定数量的骨架屏，CSS Grid 会自动处理布局
-  const totalSkeletons = 10
+  // 加载更多时显示少量骨架屏，CSS Grid 会自动处理布局
+  const totalSkeletons = Math.max(1, Math.floor(props.loadingMoreSkeletonCount))
 
   return Array.from({ length: totalSkeletons }, (_, i) => ({
     _isSkeleton: true,
@@ -382,7 +396,6 @@ const debouncedCheck = useDebounceFn(checkShouldPreload, 100)
 // emitter 路径已在 App.vue 的 RAF 内，直接同步更新避免双 RAF 延迟
 // native 路径浏览器已限制为每帧一次，也可直接更新
 function handleScroll() {
-  updateVirtualWindow()
   debouncedCheck()
 }
 
@@ -707,9 +720,7 @@ const virtualWindowRowCount = computed(() =>
 )
 
 const shouldVirtualize = computed(() => {
-  if (needSkeletonPadding.value)
-    return false
-  return limitedDisplayItems.value.length > virtualWindowRowCount.value * currentColumnCount.value
+  return false
 })
 
 type ScrollElement = HTMLElement | Window
@@ -1118,9 +1129,18 @@ watch(gridContainerRef, () => {
 })
 
 watch(
-  [currentColumnCount, () => limitedDisplayItems.value.length, () => props.gridLayout],
+  [currentColumnCount, () => props.gridLayout],
   () => {
     measuredRowSpan.value = getEstimatedRowSpan(props.gridLayout)
+    scheduleMeasureGridRowSpan()
+    scheduleVirtualWindowUpdate()
+  },
+  { flush: 'post' },
+)
+
+watch(
+  () => limitedDisplayItems.value.length,
+  () => {
     scheduleMeasureGridRowSpan()
     scheduleVirtualWindowUpdate()
   },
