@@ -136,55 +136,92 @@ function handleRowRetry(page: HomeSubPage) {
   }
 }
 
+// ── 懒加载：row 进入视口（含 300px preload）首次触发 ──
+function loadRowIfEmpty(page: HomeSubPage) {
+  switch (page) {
+    case HomeSubPage.ForYou:
+      if (forYou.videoList.value.length === 0)
+        forYou.getData()
+      break
+    case HomeSubPage.Trending:
+      if (trending.items.value.length === 0)
+        trending.load()
+      break
+    case HomeSubPage.Following:
+      if (following.videoList.value.length === 0)
+        following.initData()
+      break
+    case HomeSubPage.SubscribedSeries:
+      if (subscribedSeries.items.value.length === 0)
+        subscribedSeries.load()
+      break
+    case HomeSubPage.Weekly:
+      if (weekly.items.value.length === 0)
+        weekly.initLoad()
+      break
+    case HomeSubPage.Live:
+      if (live.items.value.length === 0)
+        live.load()
+      break
+    case HomeSubPage.Precious:
+      if (precious.items.value.length === 0)
+        precious.load()
+      break
+  }
+}
+
+// ── 横向无限滚动：row 滚到末尾时拉下一页 ──
+function loadRowMore(page: HomeSubPage) {
+  switch (page) {
+    case HomeSubPage.ForYou:
+      forYou.handleLoadMore?.()
+      break
+    case HomeSubPage.Trending:
+      if (!trending.noMoreContent?.value)
+        trending.load()
+      break
+    case HomeSubPage.Following:
+      if (!following.noMoreContent?.value)
+        following.handleLoadMore?.()
+      break
+    case HomeSubPage.SubscribedSeries:
+      if (!subscribedSeries.noMoreContent?.value)
+        subscribedSeries.load()
+      break
+    case HomeSubPage.Live:
+      if (!live.noMoreContent?.value)
+        live.load()
+      break
+    // Weekly / Precious 都是固定列表，无 loadMore
+  }
+}
+
+// ── 当前 row 是否还有更多分页可加载 ──
+function getRowHasMore(page: HomeSubPage): boolean {
+  switch (page) {
+    case HomeSubPage.ForYou: return true // ForYou 推荐流可一直滚
+    case HomeSubPage.Trending: return !trending.noMoreContent?.value
+    case HomeSubPage.Following: return !following.noMoreContent?.value
+    case HomeSubPage.SubscribedSeries: return !subscribedSeries.noMoreContent?.value
+    case HomeSubPage.Live: return !live.noMoreContent?.value
+    default: return false // Weekly / Precious 无分页
+  }
+}
+
 // ── Hover-target ref for VideoCardHover Teleport (决议 #4) ────────
 const hoverTargetRef = ref<HTMLElement | null>(null)
 provide('netflix-hover-target', hoverTargetRef)
 
-// ── Mount: trigger data loads ──────────────────────────────────────
+// ── Mount: 仅加载 Hero + 首个可见 row 的数据 ──────────────────────────
+// 其他 row 由 IntersectionObserver 进入视口前 300px 触发懒加载，
+// 滚到末端时由 loadRowMore 拉下一页（无限滚动）。
 onMounted(() => {
-  // 立即加载首屏需要的两个数据源（Hero + 热门推荐 row 共用）
+  // Hero 必须立即出，trending 是 hero picker 的主源
   if (trending.items.value.length === 0)
     trending.load()
+  // ForYou 同时供 hero 兜底 + 第一个 row，立即拉
   if (forYou.videoList.value.length === 0)
     forYou.getData()
-
-  // 其他 SubPage row 延后到主线程空闲再触发，避免一次性挤爆 6 路并发上限
-  // 让 Hero 图片优先解码 + 渲染，首屏体感更快
-  const loadDeferred = () => {
-    const visiblePages = (settings.value.homePageTabVisibilityList ?? [])
-      .filter(v => v.visible && v.page !== HomeSubPage.Ranking)
-      .map(v => v.page)
-
-    for (const page of visiblePages) {
-      switch (page) {
-        case HomeSubPage.Following:
-          if (following.videoList.value.length === 0)
-            following.initData()
-          break
-        case HomeSubPage.SubscribedSeries:
-          if (subscribedSeries.items.value.length === 0)
-            subscribedSeries.load()
-          break
-        case HomeSubPage.Weekly:
-          if (weekly.items.value.length === 0)
-            weekly.initLoad()
-          break
-        case HomeSubPage.Live:
-          if (live.items.value.length === 0)
-            live.load()
-          break
-        case HomeSubPage.Precious:
-          if (precious.items.value.length === 0)
-            precious.load()
-          break
-      }
-    }
-  }
-
-  if (typeof window.requestIdleCallback === 'function')
-    window.requestIdleCallback(loadDeferred, { timeout: 1500 })
-  else
-    setTimeout(loadDeferred, 250)
 })
 </script>
 
@@ -199,7 +236,7 @@ onMounted(() => {
     <!-- Top 10 Row -->
     <Top10Row />
 
-    <!-- Dynamic SubPage Rows -->
+    <!-- Dynamic SubPage Rows（懒加载 + 横向无限滚动） -->
     <template v-for="row in rows" :key="row.key">
       <HorizontalRow
         v-if="row.kind === 'subpage'"
@@ -207,7 +244,10 @@ onMounted(() => {
         :items="getRowData(row.page).items"
         :loading="getRowData(row.page).loading"
         :error="getRowData(row.page).error"
+        :has-more="getRowHasMore(row.page)"
         @retry="handleRowRetry(row.page)"
+        @activate="loadRowIfEmpty(row.page)"
+        @load-more="loadRowMore(row.page)"
       />
     </template>
 

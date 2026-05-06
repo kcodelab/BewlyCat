@@ -1,6 +1,6 @@
 <!-- src/contentScripts/views/Home/netflix/ContinueWatchingRow.vue -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { Video } from '~/components/VideoCard/types'
@@ -9,7 +9,7 @@ import { useHistoryData } from '~/contentScripts/views/Home/composables/useHisto
 
 const { t } = useI18n()
 
-const { items, loading, error, load } = useHistoryData()
+const { items, loading, error, noMoreContent, load } = useHistoryData()
 
 interface EnrichedItem {
   video: Video
@@ -43,30 +43,72 @@ const enrichedItems = computed<EnrichedItem[]>(() => {
   })
 })
 
+const sectionRef = ref<HTMLElement | null>(null)
 const rowRef = ref<HTMLElement | null>(null)
 
-onMounted(async () => {
-  if (items.value.length === 0)
-    await load()
+// 懒加载：进入视口前 300px 才发首次请求
+let activated = false
+let observer: IntersectionObserver | null = null
+onMounted(() => {
+  if (!sectionRef.value || typeof IntersectionObserver === 'undefined') {
+    if (!activated && items.value.length === 0) {
+      activated = true
+      load()
+    }
+    return
+  }
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0]?.isIntersecting && !activated) {
+      activated = true
+      if (items.value.length === 0)
+        load()
+      observer?.disconnect()
+      observer = null
+    }
+  }, { rootMargin: '300px 0px' })
+  observer.observe(sectionRef.value)
 })
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+// 横向无限滚动：滚到末尾且未到达 noMoreContent 时拉下一页
+let loadMoreCooldown = false
+function onScroll() {
+  if (loading.value || loadMoreCooldown || noMoreContent.value)
+    return
+  const el = rowRef.value
+  if (!el)
+    return
+  const { scrollLeft, scrollWidth, clientWidth } = el
+  if (scrollWidth - scrollLeft - clientWidth < 240) {
+    loadMoreCooldown = true
+    load()
+    setTimeout(() => {
+      loadMoreCooldown = false
+    }, 500)
+  }
+}
 
 function onRetry() {
   load()
 }
 
-function scrollLeft() {
+function scrollLeftBtn() {
   if (rowRef.value)
     rowRef.value.scrollBy({ left: -rowRef.value.clientWidth, behavior: 'smooth' })
 }
 
-function scrollRight() {
+function scrollRightBtn() {
   if (rowRef.value)
     rowRef.value.scrollBy({ left: rowRef.value.clientWidth, behavior: 'smooth' })
 }
 </script>
 
 <template>
-  <section class="continue-row">
+  <section ref="sectionRef" class="continue-row">
     <h2 class="continue-row__title">
       <span class="continue-row__title-bar" aria-hidden="true" />
       {{ t('home.continue_watching') }}
@@ -85,13 +127,13 @@ function scrollRight() {
         v-if="!loading && enrichedItems.length > 0"
         class="continue-row__arrow continue-row__arrow--left"
         aria-label="Scroll left"
-        @click="scrollLeft"
+        @click="scrollLeftBtn"
       >
         ‹
       </button>
 
       <!-- Scroll container -->
-      <div ref="rowRef" class="continue-row__scroll">
+      <div ref="rowRef" class="continue-row__scroll" @scroll.passive="onScroll">
         <!-- Loading skeleton -->
         <template v-if="loading && enrichedItems.length === 0">
           <div
@@ -134,7 +176,7 @@ function scrollRight() {
         v-if="!loading && enrichedItems.length > 0"
         class="continue-row__arrow continue-row__arrow--right"
         aria-label="Scroll right"
-        @click="scrollRight"
+        @click="scrollRightBtn"
       >
         ›
       </button>

@@ -1,6 +1,6 @@
 <!-- src/contentScripts/views/Home/netflix/HorizontalRow.vue -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import type { Video } from '~/components/VideoCard/types'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
@@ -10,15 +10,22 @@ interface Props {
   items: Video[]
   loading?: boolean
   error?: Error | null
+  /** 是否还有更多分页可加载，false 时不再触发 loadMore */
+  hasMore?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   error: null,
+  hasMore: true,
 })
 
 const emit = defineEmits<{
   retry: []
+  /** Row 进入视口（含 300px preload buffer），仅首次触发 */
+  activate: []
+  /** Row 横向滚动到接近末尾，触发分页加载 */
+  loadMore: []
 }>()
 
 // NEW badge: show for videos published in the last 7 days
@@ -32,21 +39,69 @@ function isNew(video: Video): boolean {
   return Date.now() - pubMs <= SEVEN_DAYS_MS
 }
 
+const sectionRef = ref<HTMLElement | null>(null)
 const rowRef = ref<HTMLElement | null>(null)
 
-function scrollLeft() {
+// ── Lazy activation：进入视口前 300px 触发首次 load ──
+let activated = false
+let observer: IntersectionObserver | null = null
+onMounted(() => {
+  if (!sectionRef.value || typeof IntersectionObserver === 'undefined') {
+    // 不支持 IO 时降级：直接激活
+    if (!activated) {
+      activated = true
+      emit('activate')
+    }
+    return
+  }
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0]?.isIntersecting && !activated) {
+      activated = true
+      emit('activate')
+      observer?.disconnect()
+      observer = null
+    }
+  }, { rootMargin: '300px 0px' })
+  observer.observe(sectionRef.value)
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+// ── 横向无限滚动：scrollLeft 接近末尾时 emit loadMore ──
+let loadMoreCooldown = false
+function onScroll() {
+  if (!props.hasMore || props.loading || loadMoreCooldown)
+    return
+  const el = rowRef.value
+  if (!el)
+    return
+  const { scrollLeft, scrollWidth, clientWidth } = el
+  if (scrollWidth - scrollLeft - clientWidth < 240) {
+    loadMoreCooldown = true
+    emit('loadMore')
+    // 500ms 防抖避免连续滚动一帧多次触发
+    setTimeout(() => {
+      loadMoreCooldown = false
+    }, 500)
+  }
+}
+
+function scrollLeftBtn() {
   if (rowRef.value)
     rowRef.value.scrollBy({ left: -rowRef.value.clientWidth, behavior: 'smooth' })
 }
 
-function scrollRight() {
+function scrollRightBtn() {
   if (rowRef.value)
     rowRef.value.scrollBy({ left: rowRef.value.clientWidth, behavior: 'smooth' })
 }
 </script>
 
 <template>
-  <section class="netflix-row">
+  <section ref="sectionRef" class="netflix-row">
     <h2 class="netflix-row__title">
       <span class="netflix-row__title-bar" aria-hidden="true" />
       {{ title }}
@@ -65,13 +120,13 @@ function scrollRight() {
         v-if="!props.loading && props.items.length > 0"
         class="netflix-row__arrow netflix-row__arrow--left"
         aria-label="Scroll left"
-        @click="scrollLeft"
+        @click="scrollLeftBtn"
       >
         ‹
       </button>
 
       <!-- Scroll container -->
-      <div ref="rowRef" class="netflix-row__scroll">
+      <div ref="rowRef" class="netflix-row__scroll" @scroll.passive="onScroll">
         <!-- Loading skeleton -->
         <template v-if="props.loading && props.items.length === 0">
           <div
@@ -107,7 +162,7 @@ function scrollRight() {
         v-if="!props.loading && props.items.length > 0"
         class="netflix-row__arrow netflix-row__arrow--right"
         aria-label="Scroll right"
-        @click="scrollRight"
+        @click="scrollRightBtn"
       >
         ›
       </button>

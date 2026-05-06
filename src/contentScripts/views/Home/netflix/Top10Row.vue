@@ -1,6 +1,6 @@
 <!-- src/contentScripts/views/Home/netflix/Top10Row.vue -->
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { Video } from '~/components/VideoCard/types'
@@ -19,9 +19,33 @@ const top10Items = computed<Video[]>(() => {
   return items.slice(0, 10).map(item => item.displayData).filter((v): v is Video => !!v)
 })
 
-onMounted(async () => {
-  if (items.length === 0)
-    await loadVideos(defaultRankingType)
+// 懒加载：进入视口前 300px 才发首次请求
+const sectionRef = ref<HTMLElement | null>(null)
+let activated = false
+let observer: IntersectionObserver | null = null
+onMounted(() => {
+  if (!sectionRef.value || typeof IntersectionObserver === 'undefined') {
+    if (!activated && items.length === 0) {
+      activated = true
+      loadVideos(defaultRankingType)
+    }
+    return
+  }
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0]?.isIntersecting && !activated) {
+      activated = true
+      if (items.length === 0)
+        loadVideos(defaultRankingType)
+      observer?.disconnect()
+      observer = null
+    }
+  }, { rootMargin: '300px 0px' })
+  observer.observe(sectionRef.value)
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
 })
 
 function onRetry() {
@@ -54,7 +78,7 @@ function getPath(digit: string): string {
 </script>
 
 <template>
-  <section class="top10-row">
+  <section ref="sectionRef" class="top10-row">
     <h2 class="top10-row__title">
       <span class="top10-row__title-bar" aria-hidden="true" />
       {{ t('home.top10_today') }}
