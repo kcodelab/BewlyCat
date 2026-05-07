@@ -188,7 +188,7 @@ onMounted(() => {
   }
 })
 
-onBeforeUnmount(() => {
+onBeforeUnmount(async () => {
   cleanupIframeWindowListeners()
   if (isPageScrollLocked.value) {
     unlockPageScroll()
@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
   if (escPressedTimer.value) {
     clearTimeout(escPressedTimer.value)
   }
-  releaseIframeResources()
+  await releaseIframeResources()
 })
 
 onUnmounted(() => {
@@ -256,22 +256,28 @@ async function handleClose() {
 async function releaseIframeResources() {
   cleanupIframeWindowListeners()
   showIframe.value = false
-  renderIframe.value = false
   removeTopBarClassInjected.value = false
 
-  // Clear iframe content
+  // Navigate to about:blank and close browsing context BEFORE removing from DOM.
+  // Previously, renderIframe was set to false first, which removed the iframe via v-if
+  // and made iframeRef null — so contentWindow.close() was never actually called.
+  // This is especially important for Firefox which doesn't always release media
+  // resources (video decoders, buffers) when an iframe is simply removed from DOM.
   currentUrl.value = 'about:blank'
-  /**
-   * eg: When use 'iframeRef.value?.contentWindow?.document' of t.bilibili.com iframe on bilibili.com, there may be cross domain issues
-   * set the src to 'about:blank' to avoid this issue, it also can release the memory
-   */
   if (iframeRef.value) {
     iframeRef.value.src = 'about:blank'
   }
-  await nextTick()
-  iframeRef.value?.contentWindow?.close()
 
-  // Nullify the reference
+  try {
+    iframeRef.value?.contentWindow?.close()
+  }
+  catch {
+    // Cross-origin may block this
+  }
+
+  // Now safe to remove from DOM
+  renderIframe.value = false
+  await nextTick()
   iframeRef.value = null
 }
 

@@ -105,6 +105,18 @@ interface VideoCardGridProps<T = any> {
   enableRowPadding?: boolean
 
   /**
+   * 加载更多时是否在列表末尾插入骨架屏
+   * @default true
+   */
+  showLoadingMoreSkeleton?: boolean
+
+  /**
+   * 加载更多时插入的骨架屏数量
+   * @default 10
+   */
+  loadingMoreSkeletonCount?: number
+
+  /**
    * 是否为 Following 页面
    * 用于在右键菜单中默认显示"取消关注"选项
    * @default false
@@ -130,6 +142,8 @@ const props = withDefaults(defineProps<VideoCardGridProps<T>>(), {
   initialSkeletonCount: 30,
   isSkeletonItem: undefined,
   enableRowPadding: false,
+  showLoadingMoreSkeleton: true,
+  loadingMoreSkeletonCount: 10,
   requestFailed: false,
 })
 
@@ -207,7 +221,7 @@ const paddingSkeletonItems = computed(() => {
 
 // 是否正在加载更多（数据已达阈值且loading）
 const isLoadingMore = computed(() => {
-  return props.loading && props.items.length >= MIN_ITEMS_TO_RENDER
+  return props.showLoadingMoreSkeleton && props.loading && props.items.length >= MIN_ITEMS_TO_RENDER
 })
 
 // 生成加载更多时的骨架屏数据（使用固定数量，由 CSS Grid 自动处理布局）
@@ -215,8 +229,8 @@ const loadingMoreSkeletonItems = computed(() => {
   if (!isLoadingMore.value)
     return []
 
-  // 加载更多时显示固定数量的骨架屏，CSS Grid 会自动处理布局
-  const totalSkeletons = 10
+  // 加载更多时显示少量骨架屏，CSS Grid 会自动处理布局
+  const totalSkeletons = Math.max(1, Math.floor(props.loadingMoreSkeletonCount))
 
   return Array.from({ length: totalSkeletons }, (_, i) => ({
     _isSkeleton: true,
@@ -285,6 +299,7 @@ function triggerLoadMore() {
 }
 
 const supportsIntersectionObserver = typeof window !== 'undefined' && 'IntersectionObserver' in window
+const isFirefox = typeof navigator !== 'undefined' && /\bFirefox\//.test(navigator.userAgent)
 let intersectionObserver: IntersectionObserver | null = null
 
 function cleanupIntersectionObserver() {
@@ -333,6 +348,8 @@ function setupIntersectionObserver() {
 let checkPreloadRAF: number | null = null
 let virtualWindowRAF: number | null = null
 let measureRowSpanRAF: number | null = null
+let scrollPositionRestoreRAF: number | null = null
+let scrollPositionRestoreToken = 0
 let containerResizeObserver: ResizeObserver | null = null
 
 // 检查是否需要预加载
@@ -376,8 +393,9 @@ function checkShouldPreload() {
 const debouncedCheck = useDebounceFn(checkShouldPreload, 100)
 
 // 监听滚动
+// emitter 路径已在 App.vue 的 RAF 内，直接同步更新避免双 RAF 延迟
+// native 路径浏览器已限制为每帧一次，也可直接更新
 function handleScroll() {
-  scheduleVirtualWindowUpdate()
   debouncedCheck()
 }
 
@@ -487,7 +505,16 @@ watch(
 
     // 只在追加时分块渲染
     if (newLen > oldLen) {
-      scheduleChunkRender(newLen)
+      // 虚拟滚动激活时，跳过分块渲染——虚拟窗口已经限制了 DOM 数量，
+      // 分块渲染的 requestIdleCallback 在快速滚动时反而会导致渲染滞后
+      const estimatedColumns = getCurrentColumnCount(props.gridLayout, gridContainerRef.value?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 0))
+      const virtualThreshold = 6 * estimatedColumns
+      if (newLen > virtualThreshold) {
+        renderLimit.value = newLen
+      }
+      else {
+        scheduleChunkRender(newLen)
+      }
       return
     }
 
@@ -512,6 +539,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  scrollPositionRestoreToken++
   cleanupScrollListeners()
   cleanupContainerResizeObserver()
   cleanupIntersectionObserver()
@@ -530,6 +558,10 @@ onUnmounted(() => {
   if (measureRowSpanRAF !== null) {
     cancelAnimationFrame(measureRowSpanRAF)
     measureRowSpanRAF = null
+  }
+  if (scrollPositionRestoreRAF !== null) {
+    cancelAnimationFrame(scrollPositionRestoreRAF)
+    scrollPositionRestoreRAF = null
   }
   resetTransformCaches()
 })
@@ -680,7 +712,7 @@ const visibleRowCount = computed(() => {
 })
 
 const overscanRowCount = computed(() =>
-  Math.max(1, Math.ceil(visibleRowCount.value * 0.5)),
+  Math.max(2, Math.ceil(visibleRowCount.value * (isFirefox ? 1.5 : 1))),
 )
 
 const virtualWindowRowCount = computed(() =>
@@ -688,20 +720,95 @@ const virtualWindowRowCount = computed(() =>
 )
 
 const shouldVirtualize = computed(() => {
-  if (needSkeletonPadding.value)
-    return false
-  return limitedDisplayItems.value.length > virtualWindowRowCount.value * currentColumnCount.value
+  return false
 })
 
-function syncVirtualWindowRows(startRow: number, endRow: number) {
+type ScrollElement = HTMLElement | Window
+
+function isWindowScrollElement(scrollElement: ScrollElement): scrollElement is Window {
+  return scrollElement === window
+}
+
+function getWindowScrollTop(): number {
+  return document.scrollingElement?.scrollTop ?? window.scrollY ?? 0
+}
+
+function getScrollTop(scrollElement: ScrollElement): number {
+  if (isWindowScrollElement(scrollElement))
+    return getWindowScrollTop()
+  return scrollElement.scrollTop
+}
+
+function getMaxScrollTop(scrollElement: ScrollElement): number {
+  if (isWindowScrollElement(scrollElement)) {
+    const scrollingElement = document.scrollingElement ?? document.documentElement
+    return Math.max(0, scrollingElement.scrollHeight - window.innerHeight)
+  }
+
+  return Math.max(0, scrollElement.scrollHeight - scrollElement.clientHeight)
+}
+
+function setScrollTop(scrollElement: ScrollElement, scrollTop: number) {
+  const nextScrollTop = Math.max(0, Math.min(scrollTop, getMaxScrollTop(scrollElement)))
+  if (isWindowScrollElement(scrollElement)) {
+    window.scrollTo(0, nextScrollTop)
+    return
+  }
+
+  scrollElement.scrollTop = nextScrollTop
+}
+
+function findScrollElement(): ScrollElement | null {
+  if (settings.value.useOriginalBilibiliHomepage)
+    return window
+
+  let element = gridContainerRef.value?.parentElement ?? null
+  while (element) {
+    const styles = window.getComputedStyle(element)
+    const canScrollY = /auto|scroll|overlay/.test(styles.overflowY)
+    if (canScrollY && element.scrollHeight > element.clientHeight)
+      return element
+    element = element.parentElement
+  }
+
+  return null
+}
+
+function scheduleScrollTopRestore(scrollElement: ScrollElement, targetScrollTop: number) {
+  const token = ++scrollPositionRestoreToken
+
+  nextTick(() => {
+    if (token !== scrollPositionRestoreToken)
+      return
+
+    if (scrollPositionRestoreRAF !== null)
+      cancelAnimationFrame(scrollPositionRestoreRAF)
+
+    scrollPositionRestoreRAF = requestAnimationFrame(() => {
+      scrollPositionRestoreRAF = null
+
+      if (token !== scrollPositionRestoreToken || !shouldVirtualize.value)
+        return
+
+      const currentScrollTop = getScrollTop(scrollElement)
+      if (Math.abs(currentScrollTop - targetScrollTop) > 1)
+        setScrollTop(scrollElement, targetScrollTop)
+    })
+  })
+}
+
+function syncVirtualWindowRows(startRow: number, endRow: number): boolean {
   const totalRows = totalRowCount.value
   const safeStart = Math.max(0, Math.min(startRow, totalRows))
   const safeEnd = Math.max(safeStart, Math.min(endRow, totalRows))
+  const changed = virtualStartRow.value !== safeStart || virtualEndRow.value !== safeEnd
 
   if (virtualStartRow.value !== safeStart)
     virtualStartRow.value = safeStart
   if (virtualEndRow.value !== safeEnd)
     virtualEndRow.value = safeEnd
+
+  return changed
 }
 
 function updateVirtualWindow() {
@@ -730,7 +837,12 @@ function updateVirtualWindow() {
     firstVisibleRow + visibleRowCount.value + overscanRowCount.value,
   )
 
-  syncVirtualWindowRows(startRow, endRow)
+  const scrollElement = findScrollElement()
+  const scrollTop = scrollElement ? getScrollTop(scrollElement) : 0
+  const changed = syncVirtualWindowRows(startRow, endRow)
+
+  if (changed && scrollElement && scrollTop > 0)
+    scheduleScrollTopRestore(scrollElement, scrollTop)
 }
 
 function scheduleVirtualWindowUpdate() {
@@ -769,7 +881,18 @@ function measureGridRowSpan() {
   const nextRowSpan = Math.max(sampleHeight + rowGap, fallbackRowSpan * 0.75)
 
   if (Math.abs(nextRowSpan - measuredRowSpan.value) > 1) {
+    const previousRowSpan = measuredRowSpan.value
+    const topSpacerDelta = shouldVirtualize.value
+      ? virtualStartRow.value * (nextRowSpan - previousRowSpan)
+      : 0
+    const scrollElement = topSpacerDelta !== 0 ? findScrollElement() : null
+    const scrollTop = scrollElement ? getScrollTop(scrollElement) : 0
+
     measuredRowSpan.value = nextRowSpan
+
+    if (scrollElement && scrollTop > 0)
+      scheduleScrollTopRestore(scrollElement, scrollTop + topSpacerDelta)
+
     scheduleVirtualWindowUpdate()
   }
 }
@@ -1006,9 +1129,18 @@ watch(gridContainerRef, () => {
 })
 
 watch(
-  [currentColumnCount, () => limitedDisplayItems.value.length, () => props.gridLayout],
+  [currentColumnCount, () => props.gridLayout],
   () => {
     measuredRowSpan.value = getEstimatedRowSpan(props.gridLayout)
+    scheduleMeasureGridRowSpan()
+    scheduleVirtualWindowUpdate()
+  },
+  { flush: 'post' },
+)
+
+watch(
+  () => limitedDisplayItems.value.length,
+  () => {
     scheduleMeasureGridRowSpan()
     scheduleVirtualWindowUpdate()
   },
@@ -1079,6 +1211,7 @@ function getUniqueKey(item: T, index: number): string | number {
       v-else
       ref="gridContainerRef"
       class="video-card-grid-container"
+      :class="{ 'is-firefox': isFirefox }"
       m="b-0 t-0" relative w-full
       :style="gridContainerStyle"
     >
@@ -1230,13 +1363,18 @@ function getUniqueKey(item: T, index: number): string | number {
 
 .video-card-grid-container {
   overflow-anchor: none;
+
+  &.is-firefox :deep(.video-card-container) {
+    content-visibility: visible;
+    contain-intrinsic-size: auto none;
+  }
 }
 
 :deep(.video-card-container) {
   contain: layout style;
   content-visibility: auto;
   overflow-anchor: none;
-  contain-intrinsic-size: auto none;
+  contain-intrinsic-size: auto 360px 260px;
   min-width: 0;
 }
 
